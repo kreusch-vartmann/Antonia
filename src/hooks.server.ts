@@ -67,15 +67,22 @@ export const handleError: HandleServerError = (caught) => {
 	if (caught.kind === 'unknown') {
 		// Only technical info; no request bodies, no user data.
 		const err = caught.error;
+		// Query errors contain bound parameters (possibly personal data) – strip them.
+		const strip = (s: string | undefined) => s?.split('\nparams:')[0];
 		log.error('unhandled error', {
 			errorId,
 			route: caught.event.route.id,
 			error:
 				err instanceof Error
 					? {
-							name: err.name,
-							message: err.message,
-							stack: err.stack?.split('\n').slice(1, 8).join('\n')
+							type: err.name,
+							message: strip(err.message),
+							cause: err.cause instanceof Error ? strip(err.cause.message) : undefined,
+							stack: err.stack
+								?.split('\n')
+								.filter((l) => l.trimStart().startsWith('at '))
+								.slice(0, 8)
+								.join('\n')
 						}
 					: 'non-error thrown'
 		});

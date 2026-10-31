@@ -193,11 +193,11 @@ export async function overview(db: Db, teacherId: string) {
 			displayName: student.displayName,
 			firstName: student.firstName,
 			lastName: student.lastName,
-			lastRun: sql<Date | null>`(select max(started_at) from run r where r.student_id = ${student.id})`,
-			runs14: sql<number>`(select count(*)::int from run r where r.student_id = ${student.id} and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
-			tasks14: sql<number>`(select coalesce(sum(tasks_total),0)::int from run r where r.student_id = ${student.id} and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
-			firstTry14: sql<number>`(select coalesce(sum(first_try_correct),0)::int from run r where r.student_id = ${student.id} and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
-			openAssignments: sql<number>`(select count(*)::int from assignment a where a.student_id = ${student.id} and a.archived = false and (a.ends_on is null or a.ends_on >= current_date))`
+			lastRun: sql<Date | null>`(select max(started_at) from run r where r.student_id = "student"."id")`,
+			runs14: sql<number>`(select count(*)::int from run r where r.student_id = "student"."id" and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
+			tasks14: sql<number>`(select coalesce(sum(tasks_total),0)::int from run r where r.student_id = "student"."id" and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
+			firstTry14: sql<number>`(select coalesce(sum(first_try_correct),0)::int from run r where r.student_id = "student"."id" and r.status in ('finished','timeUp') and r.started_at > now() - interval '14 days')`,
+			openAssignments: sql<number>`(select count(*)::int from assignment a where a.student_id = "student"."id" and a.archived = false and (a.ends_on is null or a.ends_on >= current_date))`
 		})
 		.from(student)
 		.where(eq(student.teacherId, teacherId))

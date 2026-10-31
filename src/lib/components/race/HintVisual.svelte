@@ -67,9 +67,10 @@
 		display: block;
 	}
 	.dots {
-		max-height: 14rem;
+		max-height: 7.5rem;
+		width: auto;
 	}
 	.twenty {
-		max-width: 22rem;
+		max-width: 16rem;
 	}
 </style>

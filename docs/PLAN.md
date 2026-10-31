@@ -170,6 +170,26 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
 
 ## 5. Meilensteine
 
+**Stand:** M0 und M1 sind umgesetzt (Code, Tests, CI). Offen ist nur das Deployment in
+Coolify inkl. Backup-Einrichtung (siehe README).
+
+Umsetzungsnotizen M1:
+
+- Run-Engine (`src/lib/domain/run/engine.ts`) ist rein und szenario-/formatunabhängig;
+  das Rennen visualisiert nur `done / total`. Zustand liegt in Redis, jede Antwort
+  sofort in PostgreSQL.
+- Boxenstopp: Fehlversuch → Auto steht, Tipp nach `hintAfter`, Lösung nach
+  `solutionAfter` (Kind gibt sie selbst ein). Nicht sofort gelöste Aufgaben kommen
+  einmal wieder (Strecke wird um eine Aufgabe länger, Auto fährt trotzdem vor).
+- Zurückfallen (Option): erster Fehlversuch je Aufgabe hängt die Aufgabe erneut an
+  (Fortschrittsanteil sinkt sichtbar), max. doppelte Länge.
+- Zeitlimit pro Aufgabe: „später nochmal“ (Standard) oder „als Fehlversuch“; nach zwei
+  Zeitabläufen wird die Lösung gezeigt. Zeitlimit pro Rennen beendet mit Teilergebnis.
+- Sterne: 3 ab 90 % sofort richtig, 2 ab 60 %, sonst 1 für das Ankommen.
+- Geister-Auto = schnellste beendete Fahrt derselben Zuweisung.
+- „PDF“ = druckoptimierte Ansicht (Browser „Als PDF speichern“), CSV mit Semikolon für
+  deutsche Tabellenprogramme, Formel-Injektion wird verhindert.
+
 ### M0 – Fundament
 
 - Projektgerüst (SvelteKit, TS, Drizzle, Redis-Client, Lint/Format/Tests)

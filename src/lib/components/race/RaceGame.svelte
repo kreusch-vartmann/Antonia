@@ -614,15 +614,30 @@
 		color: #23446e;
 		background: #e6eef9;
 	}
+	@media (max-height: 900px) {
+		.key {
+			min-height: 3.4rem !important;
+			font-size: 1.6rem !important;
+		}
+		.expr {
+			font-size: clamp(2rem, 5vw, 2.8rem) !important;
+			margin: 0 !important;
+		}
+		.panel {
+			gap: var(--space-2) !important;
+			padding: var(--space-3) !important;
+		}
+	}
 	.hint {
 		background: #fff8e6;
 		border: 2px dashed #e0b84c;
 		border-radius: var(--radius);
-		padding: var(--space-3);
+		padding: var(--space-2) var(--space-3);
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
 		align-items: center;
+		justify-content: center;
 		text-align: center;
 	}
 	.hint p {

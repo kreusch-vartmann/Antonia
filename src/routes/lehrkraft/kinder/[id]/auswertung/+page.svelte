@@ -215,7 +215,12 @@
 							<td>{dateTime(run.startedAt)}</td>
 							<td>{run.setName}</td>
 							<td>{RUN_STATUS[run.status] ?? run.status}</td>
-							<td class="num">{run.tasksDone}/{run.tasksTotal}</td>
+							<td class="num">
+								{Math.min(run.tasksDone, run.tasksTotal)}/{run.tasksTotal}
+								{#if run.tasksDone > run.tasksTotal}<span class="muted small"
+										>(+{run.tasksDone - run.tasksTotal} Wdh.)</span
+									>{/if}
+							</td>
 							<td class="num">{run.firstTryCorrect}</td>
 							<td>{duration(run.durationMs)}</td>
 							<td>{stars(run.stars)}</td>

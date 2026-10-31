@@ -89,7 +89,7 @@
 	</g>
 	{#each cars as car (car.id)}
 		{@const pos = place(car.fraction, car.lane)}
-		<g transform="translate({pos.x} {pos.y}) rotate({pos.a}) scale(0.62)" class="car">
+		<g transform="translate({pos.x} {pos.y}) rotate({pos.a}) scale(0.85)" class="car">
 			<RaceCar inline model={car.model} color={car.color} ghost={car.ghost} />
 		</g>
 	{/each}

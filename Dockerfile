@@ -15,6 +15,7 @@ COPY . .
 # Die echten Werte kommen zur Laufzeit aus den Coolify-Umgebungsvariablen.
 RUN DATABASE_URL=postgres://build:build@localhost:5432/build \
     REDIS_URL=redis://localhost:6379 \
+    APP_SECRET=build-placeholder-not-a-secret-000000 \
     npm run build \
  && npm prune --omit=dev --no-audit --no-fund
 

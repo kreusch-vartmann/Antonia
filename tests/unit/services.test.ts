@@ -16,9 +16,16 @@ import {
 	listStudents
 } from '#lib/server/services/students.ts';
 import { createTasks } from '#lib/server/services/tasks.ts';
-import { assign, createSet, activeAssignmentsForChild } from '#lib/server/services/sets.ts';
+import {
+	assign,
+	createSet,
+	activeAssignmentsForChild,
+	listAssignmentsForSet,
+	listAssignmentsForStudent,
+	listSets
+} from '#lib/server/services/sets.ts';
 import { act, startOrResumeRun } from '#lib/server/services/runs.ts';
-import { exportCsv, studentReport } from '#lib/server/services/analytics.ts';
+import { exportCsv, overview, studentReport } from '#lib/server/services/analytics.ts';
 import { generateMultiplicationRow } from '#lib/domain/generators.ts';
 import { generateTotpSecret, totpAt } from '#lib/server/auth/totp.ts';
 import { createSession, destroyAllSessions, validateSession } from '#lib/server/auth/session.ts';
@@ -143,12 +150,13 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		const [a] = await activeAssignmentsForChild(db, s);
 		expect(a.setName).toBe('5er-Reihe');
 
-		let p = await startOrResumeRun(db, kv, s, a.id, 1000);
+		const T = Date.now();
+		let p = await startOrResumeRun(db, kv, s, a.id, T);
 		expect(p.settings.readAloud).toBe('auto');
 		expect(p.view.current?.presentation.parts[0]).toEqual({ kind: 'text', value: '1 · 5 =' });
 
 		// resume returns the same run
-		const again = await startOrResumeRun(db, kv, s, a.id, 1500);
+		const again = await startOrResumeRun(db, kv, s, a.id, T + 500);
 		expect(again.runId).toBe(p.runId);
 
 		// first task wrong once (neighbor error), then right
@@ -177,7 +185,7 @@ describe('full flow: set → assignment → race → evaluation', () => {
 			const expr = c.presentation.parts[0];
 			const value =
 				expr.kind === 'text' ? String(eval(expr.value.replace('·', '*').replace('=', ''))) : '0';
-			p = await act(db, kv, s, p.runId, { type: 'answer', key: c.key, value, ms: 800 }, 4000);
+			p = await act(db, kv, s, p.runId, { type: 'answer', key: c.key, value, ms: 800 }, T + 4000);
 		}
 		expect(p.view.status).toBe('finished');
 		expect(p.view.result).toMatchObject({ tasks: 3, firstTry: 2, stars: 2 });
@@ -191,6 +199,18 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		await expect(act(db, kv, other, p.runId, { type: 'tick' })).rejects.toBeInstanceOf(
 			ValidationError
 		);
+
+		const [setRow] = await listSets(db, t);
+		expect(setRow).toMatchObject({ items: 3, assignments: 1 });
+		expect((await listAssignmentsForSet(db, t, setId))[0]).toMatchObject({ runs: 1, bestStars: 2 });
+		expect((await listAssignmentsForStudent(db, t, s))[0]).toMatchObject({ runs: 1, bestStars: 2 });
+		expect((await activeAssignmentsForChild(db, s))[0]).toMatchObject({
+			items: 3,
+			runs: 1,
+			bestStars: 2
+		});
+		const ov = await overview(db, t);
+		expect(ov.find((o) => o.id === s)).toMatchObject({ runs14: 1, tasks14: 3, firstTry14: 2 });
 
 		const report = await studentReport(db, t, s);
 		expect(report.tasks).toBe(3);

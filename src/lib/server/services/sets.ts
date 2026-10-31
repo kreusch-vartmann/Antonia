@@ -14,8 +14,8 @@ export async function listSets(db: Db, teacherId: string) {
 			description: taskSet.description,
 			scenario: taskSet.scenario,
 			updatedAt: taskSet.updatedAt,
-			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = ${taskSet.id})`,
-			assignments: sql<number>`(select count(*)::int from assignment a where a.set_id = ${taskSet.id} and a.archived = false)`
+			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = "task_set"."id")`,
+			assignments: sql<number>`(select count(*)::int from assignment a where a.set_id = "task_set"."id" and a.archived = false)`
 		})
 		.from(taskSet)
 		.where(and(eq(taskSet.teacherId, teacherId), eq(taskSet.archived, false)))
@@ -289,10 +289,10 @@ export async function listAssignmentsForSet(db: Db, teacherId: string, setId: st
 			endsOn: assignment.endsOn,
 			archived: assignment.archived,
 			settings: assignment.settings,
-			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status <> 'running')`,
+			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status <> 'running')`,
 			bestStars: sql<
 				number | null
-			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
+			>`(select max(stars) from run r where r.assignment_id = "assignment"."id")`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
@@ -310,10 +310,10 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 			startsOn: assignment.startsOn,
 			endsOn: assignment.endsOn,
 			archived: assignment.archived,
-			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status <> 'running')`,
+			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status <> 'running')`,
 			bestStars: sql<
 				number | null
-			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
+			>`(select max(stars) from run r where r.assignment_id = "assignment"."id")`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
@@ -329,11 +329,11 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			setName: taskSet.name,
 			description: taskSet.description,
 			endsOn: assignment.endsOn,
-			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = ${taskSet.id})`,
+			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = "task_set"."id")`,
 			bestStars: sql<
 				number | null
-			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`,
-			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status in ('finished','timeUp'))`
+			>`(select max(stars) from run r where r.assignment_id = "assignment"."id")`,
+			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status in ('finished','timeUp'))`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))

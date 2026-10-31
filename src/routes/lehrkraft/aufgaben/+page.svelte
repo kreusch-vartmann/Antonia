@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import { OP_SYMBOL } from '#lib/domain/formats/arithmetic.ts';
 	import type { PageProps } from './$types';
 
@@ -22,6 +23,10 @@
 		<a class="btn btn-primary" href="/lehrkraft/aufgaben/neu">Aufgabe anlegen</a>
 	</div>
 </div>
+
+{#if page.url.searchParams.get('saved')}
+	<p class="success">{page.url.searchParams.get('saved')} Aufgabe(n) gespeichert.</p>
+{/if}
 
 <form method="GET" class="row filters">
 	<label class="field">

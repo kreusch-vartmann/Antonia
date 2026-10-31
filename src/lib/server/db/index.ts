@@ -14,7 +14,7 @@ let instance: Db | undefined;
 export function getDb(): Db {
 	if (!instance) {
 		client = postgres(DATABASE_URL, {
-			max: 10,
+			max: Number(process.env.DB_POOL_MAX) || 10,
 			idle_timeout: 30,
 			connect_timeout: 10,
 			onnotice: () => {}
