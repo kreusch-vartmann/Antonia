@@ -1,9 +1,11 @@
 import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit/hooks';
 import { LOG_LEVEL } from '$app/env/private';
 import { dev } from '$app/env';
-import { closeDb, runMigrations } from '#lib/server/db/index.ts';
-import { closeKv } from '#lib/server/kv/index.ts';
+import { closeDb, getDb, runMigrations } from '#lib/server/db/index.ts';
+import { closeKv, getKv } from '#lib/server/kv/index.ts';
 import { log, setLogLevel } from '#lib/server/log.ts';
+import { SESSION_COOKIE, validateSession } from '#lib/server/auth/session.ts';
+import { cleanupStaleRuns } from '#lib/server/services/runs.ts';
 
 export const init: ServerInit = async () => {
 	setLogLevel(LOG_LEVEL);
@@ -11,6 +13,7 @@ export const init: ServerInit = async () => {
 		await runMigrations('./drizzle');
 		log.info('migrations applied');
 	}
+	cleanupStaleRuns(getDb()).catch((e) => log.warn('cleanup failed', { error: e }));
 
 	process.on('sveltekit:shutdown', async () => {
 		await Promise.allSettled([closeDb(), closeKv()]);
@@ -27,9 +30,31 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// JSON API: same-origin only (form actions are protected by SvelteKit itself).
+	if (event.url.pathname.startsWith('/api/') && event.request.method !== 'GET') {
+		const origin = event.request.headers.get('origin');
+		if (!origin || origin !== event.url.origin) {
+			return new Response('Forbidden', { status: 403 });
+		}
+	}
+
+	const token = event.cookies.get(SESSION_COOKIE);
+	event.locals.session = null;
+	if (token && !event.url.pathname.startsWith('/healthz')) {
+		try {
+			event.locals.session = await validateSession(getKv(), token);
+		} catch (e) {
+			log.error('session validation failed', { error: e });
+		}
+		if (!event.locals.session) event.cookies.delete(SESSION_COOKIE, { path: '/' });
+	}
+
 	const response = await resolve(event);
 	for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
 		if (!response.headers.has(k)) response.headers.set(k, v);
+	}
+	if (event.locals.session && !response.headers.has('Cache-Control')) {
+		response.headers.set('Cache-Control', 'private, no-store');
 	}
 	if (!dev) {
 		response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');

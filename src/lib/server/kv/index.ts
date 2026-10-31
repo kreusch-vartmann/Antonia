@@ -1,7 +1,8 @@
 import { Redis } from 'ioredis';
 import { REDIS_URL } from '$app/env/private';
+import { dev } from '$app/env';
 import { log } from '../log';
-import type { Kv } from './types';
+import { MemoryKv, type Kv } from './types';
 
 export type { Kv } from './types';
 
@@ -25,10 +26,11 @@ class RedisKv implements Kv {
 
 	async incr(key: string, ttlSeconds: number) {
 		const k = PREFIX + key;
-		const [[, n]] = (await this.r.multi().incr(k).expire(k, ttlSeconds, 'NX').exec()) as [
-			[Error | null, number],
-			unknown
-		];
+		const [[, n]] = (await this.r
+			.multi()
+			.incr(k)
+			.expire(k, ttlSeconds, 'NX')
+			.exec()) as [[Error | null, number], unknown];
 		return n;
 	}
 
@@ -44,16 +46,25 @@ class RedisKv implements Kv {
 		}
 	}
 
-	quit() {
-		return this.r.quit();
+	async close() {
+		await this.r.quit();
 	}
 }
 
-let instance: RedisKv | undefined;
+let instance: Kv | undefined;
+let redis: RedisKv | undefined;
 
 /** Lazily connects to Redis, so nothing connects at build time. */
 export function getKv(): Kv {
 	if (!instance) {
+		if (REDIS_URL.startsWith('memory://')) {
+			if (!dev && process.env.ALLOW_MEMORY_KV !== '1') {
+				throw new Error('REDIS_URL=memory:// is only allowed for development and tests');
+			}
+			log.warn('using in-memory KV store (development/test only)');
+			instance = new MemoryKv();
+			return instance;
+		}
 		const r = new Redis(REDIS_URL, {
 			maxRetriesPerRequest: 3,
 			connectTimeout: 10_000
@@ -66,12 +77,14 @@ export function getKv(): Kv {
 				log.warn('redis error', { error: err.message });
 			}
 		});
-		instance = new RedisKv(r);
+		redis = new RedisKv(r);
+		instance = redis;
 	}
 	return instance;
 }
 
 export async function closeKv() {
-	await instance?.quit();
+	await redis?.close();
+	redis = undefined;
 	instance = undefined;
 }
