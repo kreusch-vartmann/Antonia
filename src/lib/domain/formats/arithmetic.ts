@@ -85,7 +85,8 @@ function reverseDigits(n: number) {
 const KERNEL = [1, 2, 5, 10];
 
 function multiplicationHint(a: number, b: number): Hint {
-	const visual = a <= 10 && b <= 10 && a > 0 && b > 0 ? { kind: 'dots' as const, rows: a, cols: b } : undefined;
+	const visual =
+		a <= 10 && b <= 10 && a > 0 && b > 0 ? { kind: 'dots' as const, rows: a, cols: b } : undefined;
 	if (a === 0 || b === 0) return { text: 'Mal 0 ergibt immer 0.', visual };
 	if (a === 1 || b === 1) {
 		const other = a === 1 ? b : a;
@@ -122,7 +123,10 @@ function additionHint(a: number, op: '+' | '-', b: number, r: number): Hint {
 	const visual = within20 ? { kind: 'twenty' as const, a, b, op } : undefined;
 	if (op === '+') {
 		if (within20 && a < 10 && r > 10) {
-			return { text: `Rechne erst bis 10: ${a} + ${10 - a} = 10. Dann noch ${b - (10 - a)} dazu.`, visual };
+			return {
+				text: `Rechne erst bis 10: ${a} + ${10 - a} = 10. Dann noch ${b - (10 - a)} dazu.`,
+				visual
+			};
 		}
 		if (b >= 10 && b % 10 !== 0) {
 			const t = b - (b % 10);
@@ -131,7 +135,10 @@ function additionHint(a: number, op: '+' | '-', b: number, r: number): Hint {
 		return { text: `Lege erst ${a} Plättchen, dann ${b} dazu.`, visual };
 	}
 	if (within20 && a > 10 && r < 10) {
-		return { text: `Rechne erst bis 10: ${a} − ${a - 10} = 10. Dann noch ${b - (a - 10)} weg.`, visual };
+		return {
+			text: `Rechne erst bis 10: ${a} − ${a - 10} = 10. Dann noch ${b - (a - 10)} weg.`,
+			visual
+		};
 	}
 	if (b >= 10 && b % 10 !== 0) {
 		const t = b - (b % 10);
@@ -169,7 +176,11 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 				parts.push({ kind: 'gap' }, { kind: 'text', value: `${s} ${b} = ${r}` });
 				speech += `Wie viel ${w} ${b} ist gleich ${r}?`;
 			} else {
-				parts.push({ kind: 'text', value: `${a} ${s}` }, { kind: 'gap' }, { kind: 'text', value: `= ${r}` });
+				parts.push(
+					{ kind: 'text', value: `${a} ${s}` },
+					{ kind: 'gap' },
+					{ kind: 'text', value: `= ${r}` }
+				);
 				speech += `${a} ${w} wie viel ist gleich ${r}?`;
 			}
 		} else {
@@ -291,8 +302,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		const r = computeResult(a, op, b) ?? 0;
 		const max = Math.max(a, b, r);
 		const zr = max <= 10 ? 10 : max <= 20 ? 20 : max <= 100 ? 100 : 1000;
-		const crosses =
-			op === '+' ? (a % 10) + (b % 10) >= 10 : a % 10 < b % 10;
+		const crosses = op === '+' ? (a % 10) + (b % 10) >= 10 : a % 10 < b % 10;
 		return `${OP_LABEL[op]} ZR ${zr}${zr > 10 ? (crosses ? ' mit Übergang' : ' ohne Übergang') : ''}`;
 	}
 };

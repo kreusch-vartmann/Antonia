@@ -31,13 +31,21 @@ async function currentEpoch(kv: Kv, role: Role, userId: string) {
 
 export async function createSession(kv: Kv, role: Role, userId: string): Promise<string> {
 	const token = randomToken(32);
-	const data: SessionData = { role, userId, epoch: await currentEpoch(kv, role, userId), createdAt: Date.now() };
+	const data: SessionData = {
+		role,
+		userId,
+		epoch: await currentEpoch(kv, role, userId),
+		createdAt: Date.now()
+	};
 	await kv.set(key(token), JSON.stringify(data), SESSION_TTL[role]);
 	return token;
 }
 
 /** Validates a session and extends it (sliding expiry). */
-export async function validateSession(kv: Kv, token: string | undefined): Promise<SessionData | null> {
+export async function validateSession(
+	kv: Kv,
+	token: string | undefined
+): Promise<SessionData | null> {
 	if (!token || token.length > 100) return null;
 	const raw = await kv.get(key(token));
 	if (!raw) return null;

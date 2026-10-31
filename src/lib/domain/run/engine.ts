@@ -237,7 +237,10 @@ export function tick(state: RunState, now: number): boolean {
 	return false;
 }
 
-function eventBase(state: RunState, cur: Current): Omit<AnswerEventDraft, 'kind' | 'given' | 'correct' | 'ms' | 'errorPattern'> {
+function eventBase(
+	state: RunState,
+	cur: Current
+): Omit<AnswerEventDraft, 'kind' | 'given' | 'correct' | 'ms' | 'errorPattern'> {
 	const def = state.tasks[cur.taskId];
 	state.seq += 1;
 	return {

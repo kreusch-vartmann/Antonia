@@ -71,7 +71,11 @@ export async function updateSet(
 ) {
 	const res = await db
 		.update(taskSet)
-		.set({ ...cleanSet(input), settings: sanitizeLayer(input.settings ?? {}), updatedAt: new Date() })
+		.set({
+			...cleanSet(input),
+			settings: sanitizeLayer(input.settings ?? {}),
+			updatedAt: new Date()
+		})
 		.where(and(eq(taskSet.id, id), eq(taskSet.teacherId, teacherId)))
 		.returning({ id: taskSet.id });
 	if (res.length === 0) throw new ValidationError('Set nicht gefunden.');
@@ -138,7 +142,12 @@ export async function duplicateSet(db: Db, teacherId: string, id: string) {
 	});
 	if (items.length) {
 		await db.insert(taskSetItem).values(
-			items.map((i) => ({ setId: newId, taskId: i.task.id, position: i.position, settings: i.itemSettings }))
+			items.map((i) => ({
+				setId: newId,
+				taskId: i.task.id,
+				position: i.position,
+				settings: i.itemSettings
+			}))
 		);
 	}
 	return newId;
@@ -192,7 +201,8 @@ export async function assign(
 	if (!set) throw new ValidationError('Set nicht gefunden.');
 	const startsOn = cleanDate(input.startsOn);
 	const endsOn = cleanDate(input.endsOn);
-	if (startsOn && endsOn && startsOn > endsOn) throw new ValidationError('Das Ende liegt vor dem Beginn.');
+	if (startsOn && endsOn && startsOn > endsOn)
+		throw new ValidationError('Das Ende liegt vor dem Beginn.');
 	const ids = [...new Set(input.studentIds)];
 	if (ids.length === 0) throw new ValidationError('Bitte mindestens ein Kind auswählen.');
 	const owned = await db
@@ -214,7 +224,17 @@ export async function assign(
 /** Loads an assignment only if it belongs to the teacher (via its set). */
 export async function getAssignmentForTeacher(db: Db, teacherId: string, id: string) {
 	const [a] = await db
-		.select({ assignment, set: taskSet, student: { id: student.id, displayName: student.displayName, firstName: student.firstName, lastName: student.lastName, settings: student.settings } })
+		.select({
+			assignment,
+			set: taskSet,
+			student: {
+				id: student.id,
+				displayName: student.displayName,
+				firstName: student.firstName,
+				lastName: student.lastName,
+				settings: student.settings
+			}
+		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
 		.innerJoin(student, eq(student.id, assignment.studentId))
@@ -226,13 +246,19 @@ export async function updateAssignment(
 	db: Db,
 	teacherId: string,
 	id: string,
-	input: { startsOn?: string | null; endsOn?: string | null; settings?: SettingsLayer; archived?: boolean }
+	input: {
+		startsOn?: string | null;
+		endsOn?: string | null;
+		settings?: SettingsLayer;
+		archived?: boolean;
+	}
 ) {
 	const a = await getAssignmentForTeacher(db, teacherId, id);
 	if (!a) throw new ValidationError('Zuweisung nicht gefunden.');
 	const startsOn = cleanDate(input.startsOn);
 	const endsOn = cleanDate(input.endsOn);
-	if (startsOn && endsOn && startsOn > endsOn) throw new ValidationError('Das Ende liegt vor dem Beginn.');
+	if (startsOn && endsOn && startsOn > endsOn)
+		throw new ValidationError('Das Ende liegt vor dem Beginn.');
 	await db
 		.update(assignment)
 		.set({
@@ -264,7 +290,9 @@ export async function listAssignmentsForSet(db: Db, teacherId: string, setId: st
 			archived: assignment.archived,
 			settings: assignment.settings,
 			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status <> 'running')`,
-			bestStars: sql<number | null>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
+			bestStars: sql<
+				number | null
+			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
@@ -283,7 +311,9 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 			endsOn: assignment.endsOn,
 			archived: assignment.archived,
 			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status <> 'running')`,
-			bestStars: sql<number | null>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
+			bestStars: sql<
+				number | null
+			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
@@ -300,7 +330,9 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			description: taskSet.description,
 			endsOn: assignment.endsOn,
 			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = ${taskSet.id})`,
-			bestStars: sql<number | null>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`,
+			bestStars: sql<
+				number | null
+			>`(select max(stars) from run r where r.assignment_id = ${assignment.id})`,
 			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = ${assignment.id} and r.status in ('finished','timeUp'))`
 		})
 		.from(assignment)

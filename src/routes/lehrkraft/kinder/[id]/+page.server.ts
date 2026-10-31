@@ -19,9 +19,10 @@ export const load: PageServerLoad = async (event) => {
 	if (!isUuid(event.params.id)) error(404, 'Nicht gefunden');
 	const student = await getStudent(db(), teacherId, event.params.id);
 	if (!student) error(404, 'Nicht gefunden');
-	const { passwordHash: _ph, ...safe } = student;
+	const safe: Partial<typeof student> = { ...student };
+	delete safe.passwordHash;
 	return {
-		student: safe,
+		student: safe as Omit<typeof student, 'passwordHash'>,
 		assignments: await listAssignmentsForStudent(db(), teacherId, student.id),
 		suggestedPassword: kidPassword()
 	};

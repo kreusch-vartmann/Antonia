@@ -13,7 +13,9 @@ export interface TaskDraft {
 	origin: TaskOrigin;
 }
 
-const bool = z.union([z.boolean(), z.enum(['true', 'false', 'on'])]).transform((v) => v === true || v === 'true' || v === 'on');
+const bool = z
+	.union([z.boolean(), z.enum(['true', 'false', 'on'])])
+	.transform((v) => v === true || v === 'true' || v === 'on');
 
 export const multiplicationRowParams = z
 	.object({
@@ -48,7 +50,15 @@ export const addSubParams = z.object({
 	seed: z.coerce.number().int().default(1)
 });
 
-function make(a: number, op: Op, b: number, gap: Gap, tags: string[], generator: string, params: object): TaskDraft {
+function make(
+	a: number,
+	op: Op,
+	b: number,
+	gap: Gap,
+	tags: string[],
+	generator: string,
+	params: object
+): TaskDraft {
 	const expr = { a, op, b, gap };
 	const answer = expectedAnswer(expr);
 	if (answer === null) throw new Error('invalid generated task');

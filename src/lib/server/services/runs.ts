@@ -124,7 +124,8 @@ export async function startOrResumeRun(
 	now = Date.now()
 ): Promise<RunPayload> {
 	const active = await activeAssignmentsForChild(db, studentId);
-	if (!active.some((a) => a.id === assignmentId)) throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
+	if (!active.some((a) => a.id === assignmentId))
+		throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
 
 	const existingId = await kv.get(activeKey(assignmentId));
 	if (existingId) {
@@ -274,7 +275,13 @@ export async function act(
 	});
 }
 
-export async function getRunPayload(db: Db, kv: Kv, studentId: string, runId: string, now = Date.now()) {
+export async function getRunPayload(
+	db: Db,
+	kv: Kv,
+	studentId: string,
+	runId: string,
+	now = Date.now()
+) {
 	const s = await load(kv, runId);
 	if (!s || s.studentId !== studentId) return null;
 	if (s.engine.status === 'running' && tick(s.engine, now)) await persistEnd(db, kv, s);

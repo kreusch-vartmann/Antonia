@@ -14,14 +14,22 @@ describe('arithmetic format', () => {
 		expect(arithmetic.validate(mul(3, 5)).ok).toBe(true);
 		expect(arithmetic.validate({ format: 'arithmetic', answer: 3 }).ok).toBe(false);
 		expect(
-			arithmetic.validate({ format: 'arithmetic', expr: { a: 3, op: '-', b: 5, gap: 'result' }, answer: 0 }).ok
+			arithmetic.validate({
+				format: 'arithmetic',
+				expr: { a: 3, op: '-', b: 5, gap: 'result' },
+				answer: 0
+			}).ok
 		).toBe(false);
 		expect(
-			arithmetic.validate({ format: 'arithmetic', expr: { a: 7, op: ':', b: 2, gap: 'result' }, answer: 3 }).ok
+			arithmetic.validate({
+				format: 'arithmetic',
+				expr: { a: 7, op: ':', b: 2, gap: 'result' },
+				answer: 3
+			}).ok
 		).toBe(false);
-		expect(arithmetic.validate({ format: 'arithmetic', text: 'Wie viele Finger?', answer: 10 }).ok).toBe(
-			true
-		);
+		expect(
+			arithmetic.validate({ format: 'arithmetic', text: 'Wie viele Finger?', answer: 10 }).ok
+		).toBe(true);
 	});
 
 	it('presents gaps correctly without revealing the answer', () => {
@@ -41,7 +49,11 @@ describe('arithmetic format', () => {
 	});
 
 	it('uses the teacher-defined answer', () => {
-		const c: ArithmeticContent = { format: 'arithmetic', text: 'Wie viele Beine hat ein Hund?', answer: 4 };
+		const c: ArithmeticContent = {
+			format: 'arithmetic',
+			text: 'Wie viele Beine hat ein Hund?',
+			answer: 4
+		};
 		expect(arithmetic.check(c, '4')).toBe(true);
 	});
 
@@ -86,7 +98,11 @@ describe('arithmetic format', () => {
 		expect(arithmetic.family(mul(3, 5))).toBe('1·1 Kernaufgabe');
 		expect(arithmetic.family(mul(7, 8))).toBe('1·1 abgeleitet');
 		expect(
-			arithmetic.family({ format: 'arithmetic', expr: { a: 8, op: '+', b: 5, gap: 'result' }, answer: 13 })
+			arithmetic.family({
+				format: 'arithmetic',
+				expr: { a: 8, op: '+', b: 5, gap: 'result' },
+				answer: 13
+			})
 		).toBe('Plus ZR 20 mit Übergang');
 	});
 

@@ -44,9 +44,36 @@ export function studentPasswordProblem(pw: string): string | null {
 }
 
 const WORDS = [
-	'apfel', 'ball', 'baum', 'biene', 'blume', 'boot', 'eule', 'fisch', 'frosch', 'hase',
-	'igel', 'katze', 'kiwi', 'koala', 'mond', 'maus', 'pferd', 'pinguin', 'rabe', 'rakete',
-	'sonne', 'stern', 'tiger', 'wal', 'wolke', 'zebra', 'ente', 'fuchs', 'lama', 'panda'
+	'apfel',
+	'ball',
+	'baum',
+	'biene',
+	'blume',
+	'boot',
+	'eule',
+	'fisch',
+	'frosch',
+	'hase',
+	'igel',
+	'katze',
+	'kiwi',
+	'koala',
+	'mond',
+	'maus',
+	'pferd',
+	'pinguin',
+	'rabe',
+	'rakete',
+	'sonne',
+	'stern',
+	'tiger',
+	'wal',
+	'wolke',
+	'zebra',
+	'ente',
+	'fuchs',
+	'lama',
+	'panda'
 ];
 
 /** Child-friendly password, e.g. "sonne47". */

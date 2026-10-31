@@ -26,11 +26,10 @@ class RedisKv implements Kv {
 
 	async incr(key: string, ttlSeconds: number) {
 		const k = PREFIX + key;
-		const [[, n]] = (await this.r
-			.multi()
-			.incr(k)
-			.expire(k, ttlSeconds, 'NX')
-			.exec()) as [[Error | null, number], unknown];
+		const [[, n]] = (await this.r.multi().incr(k).expire(k, ttlSeconds, 'NX').exec()) as [
+			[Error | null, number],
+			unknown
+		];
 		return n;
 	}
 

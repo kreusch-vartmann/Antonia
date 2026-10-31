@@ -32,7 +32,11 @@ export async function teacherCount(db: Db): Promise<number> {
 	return r.n;
 }
 
-export async function isUsernameTaken(db: Db, username: string, exceptId?: string): Promise<boolean> {
+export async function isUsernameTaken(
+	db: Db,
+	username: string,
+	exceptId?: string
+): Promise<boolean> {
 	const u = normalizeUsername(username);
 	const t = await db.select({ id: teacher.id }).from(teacher).where(eq(teacher.username, u));
 	const s = await db.select({ id: student.id }).from(student).where(eq(student.username, u));
@@ -56,10 +60,12 @@ export async function createTeacher(
 ) {
 	const username = checkUsername(input.username);
 	const displayName = input.displayName.trim();
-	if (!displayName || displayName.length > 80) throw new ValidationError('Name fehlt.', 'displayName');
+	if (!displayName || displayName.length > 80)
+		throw new ValidationError('Name fehlt.', 'displayName');
 	const problem = teacherPasswordProblem(input.password);
 	if (problem) throw new ValidationError(problem, 'password');
-	if (await isUsernameTaken(db, username)) throw new ValidationError('Benutzername ist vergeben.', 'username');
+	if (await isUsernameTaken(db, username))
+		throw new ValidationError('Benutzername ist vergeben.', 'username');
 	const [row] = await db
 		.insert(teacher)
 		.values({ username, displayName, passwordHash: await hashPassword(input.password) })
@@ -91,10 +97,15 @@ export async function login(
 		.where(eq(teacher.username, u));
 	const [s] = t
 		? []
-		: await db.select({ id: student.id, hash: student.passwordHash }).from(student).where(eq(student.username, u));
+		: await db
+				.select({ id: student.id, hash: student.passwordHash })
+				.from(student)
+				.where(eq(student.username, u));
 
 	const user = t ?? s;
-	const valid = user ? await verifyPassword(user.hash, input.password) : await dummyVerify(input.password);
+	const valid = user
+		? await verifyPassword(user.hash, input.password)
+		: await dummyVerify(input.password);
 	if (!user || !valid) {
 		await registerFailure(kv, userKey, LOGIN_LIMITS.perUser);
 		await registerFailure(kv, ipKey, LOGIN_LIMITS.perIp);
@@ -156,7 +167,11 @@ export async function enableTotp(
 	const { plain, hashes } = generateRecoveryCodes();
 	await db
 		.update(teacher)
-		.set({ totpSecretEnc: encrypt(secret, appSecret), recoveryCodes: hashes, updatedAt: new Date() })
+		.set({
+			totpSecretEnc: encrypt(secret, appSecret),
+			recoveryCodes: hashes,
+			updatedAt: new Date()
+		})
 		.where(eq(teacher.id, teacherId));
 	await audit(db, teacherId, 'teacher.2fa.enable', 'teacher', teacherId);
 	return plain;

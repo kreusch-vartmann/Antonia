@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { answer, createRun, pickTaskSettings, tick, timeout, view, type RunTaskDef } from './engine';
+import {
+	answer,
+	createRun,
+	pickTaskSettings,
+	tick,
+	timeout,
+	view,
+	type RunTaskDef
+} from './engine';
 import { DEFAULT_SETTINGS, type Settings } from '../settings';
 import { generateMultiplicationRow } from '../generators';
 
@@ -14,8 +22,7 @@ function setup(overrides: Partial<Settings> = {}, n = 3) {
 }
 
 const key = (s: ReturnType<typeof setup>) => view(s, 0).current!.key;
-const solution = (s: ReturnType<typeof setup>) =>
-	String(s.tasks[s.current!.taskId].content.answer);
+const solution = (s: ReturnType<typeof setup>) => String(s.tasks[s.current!.taskId].content.answer);
 
 describe('run engine', () => {
 	it('finishes with 3 stars when everything is right on the first try', () => {

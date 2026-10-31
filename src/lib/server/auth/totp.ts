@@ -75,7 +75,11 @@ export function qrSvg(text: string): Promise<string> {
 /** 8 recovery codes like "k3fz-9q2m"; returns plain codes and their hashes. */
 export function generateRecoveryCodes(): { plain: string[]; hashes: string[] } {
 	const plain = Array.from({ length: 8 }, () => {
-		const t = randomToken(8).toLowerCase().replace(/[^a-z0-9]/g, '').padEnd(8, '0').slice(0, 8);
+		const t = randomToken(8)
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, '')
+			.padEnd(8, '0')
+			.slice(0, 8);
 		return `${t.slice(0, 4)}-${t.slice(4)}`;
 	});
 	return { plain, hashes: plain.map((p) => sha256(p)) };

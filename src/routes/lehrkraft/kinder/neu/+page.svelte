@@ -14,12 +14,16 @@
 {#if form?.created}
 	<div class="card stack">
 		<p class="success">Das Kind wurde angelegt.</p>
-		<p>Zugangsdaten – bitte jetzt notieren oder <a href="/lehrkraft/kinder/karten">Karte drucken</a>:</p>
+		<p>
+			Zugangsdaten – bitte jetzt notieren oder <a href="/lehrkraft/kinder/karten">Karte drucken</a>:
+		</p>
 		<p class="creds">
 			Benutzername: <strong>{form.created.username}</strong><br />
 			Passwort: <strong>{form.created.password}</strong>
 		</p>
-		<p class="muted small">Das Passwort wird nur jetzt angezeigt. Du kannst es später jederzeit zurücksetzen.</p>
+		<p class="muted small">
+			Das Passwort wird nur jetzt angezeigt. Du kannst es später jederzeit zurücksetzen.
+		</p>
 		<div class="row">
 			<a class="btn btn-primary" href="/lehrkraft/kinder/{form.created.id}">Zum Kind</a>
 			<a class="btn" href="/lehrkraft/kinder/neu" data-sveltekit-reload>Weiteres Kind anlegen</a>
@@ -36,7 +40,13 @@
 		/>
 		<label class="field">
 			<span>Passwort *</span>
-			<input name="password" required minlength="4" value={data.suggestedPassword} autocomplete="off" />
+			<input
+				name="password"
+				required
+				minlength="4"
+				value={data.suggestedPassword}
+				autocomplete="off"
+			/>
 			<small>Kindgerechter Vorschlag – du kannst ihn ändern.</small>
 		</label>
 		<div><button class="btn btn-primary big">Anlegen</button></div>

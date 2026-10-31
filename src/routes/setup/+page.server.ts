@@ -24,8 +24,10 @@ export const actions: Actions = {
 		const password = String(form.get('password') ?? '');
 		const password2 = String(form.get('password2') ?? '');
 		const values = { username, displayName };
-		if (!safeEqual(token, SETUP_TOKEN!)) return fail(403, { ...values, error: 'Einrichtungs-Token ist falsch.' });
-		if (password !== password2) return fail(400, { ...values, error: 'Die Passwörter stimmen nicht überein.' });
+		if (!safeEqual(token, SETUP_TOKEN!))
+			return fail(403, { ...values, error: 'Einrichtungs-Token ist falsch.' });
+		if (password !== password2)
+			return fail(400, { ...values, error: 'Die Passwörter stimmen nicht überein.' });
 		let id: string;
 		try {
 			id = await createTeacher(db(), { username, displayName, password });

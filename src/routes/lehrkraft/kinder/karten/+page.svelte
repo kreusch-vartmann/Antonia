@@ -16,8 +16,10 @@
 	<p><a href="/lehrkraft/kinder">← Kinder</a></p>
 	<h1>Zugangskarten</h1>
 	<p>
-		Passwörter sind sicher verschlüsselt gespeichert und können nicht angezeigt werden. Du kannst Karten
-		ohne Passwort drucken (zum Selbsteintragen) oder für ausgewählte Kinder <strong>neue Passwörter</strong>
+		Passwörter sind sicher verschlüsselt gespeichert und können nicht angezeigt werden. Du kannst
+		Karten ohne Passwort drucken (zum Selbsteintragen) oder für ausgewählte Kinder <strong
+			>neue Passwörter</strong
+		>
 		erzeugen.
 	</p>
 	<form method="POST" use:enhance class="stack card">
@@ -33,7 +35,9 @@
 		</div>
 	</form>
 	{#if Object.keys(passwords).length}
-		<p class="notice">Neue Passwörter erzeugt. Jetzt drucken – sie werden nicht erneut angezeigt.</p>
+		<p class="notice">
+			Neue Passwörter erzeugt. Jetzt drucken – sie werden nicht erneut angezeigt.
+		</p>
 	{/if}
 </div>
 
@@ -45,7 +49,8 @@
 			<div><span class="muted">Benutzername:</span> <strong>{s.username}</strong></div>
 			<div>
 				<span class="muted">Passwort:</span>
-				{#if passwords[s.id]}<strong>{passwords[s.id]}</strong>{:else}<span class="blank"></span>{/if}
+				{#if passwords[s.id]}<strong>{passwords[s.id]}</strong>{:else}<span class="blank"
+					></span>{/if}
 			</div>
 		</div>
 	{/each}

@@ -66,10 +66,15 @@ export async function getStudentSelf(db: Db, id: string) {
 	return s ?? null;
 }
 
-export async function createStudent(db: Db, teacherId: string, input: StudentInput & { password: string }) {
+export async function createStudent(
+	db: Db,
+	teacherId: string,
+	input: StudentInput & { password: string }
+) {
 	const c = clean(input);
 	const username = checkUsername(input.username);
-	if (await isUsernameTaken(db, username)) throw new ValidationError('Benutzername ist vergeben.', 'username');
+	if (await isUsernameTaken(db, username))
+		throw new ValidationError('Benutzername ist vergeben.', 'username');
 	const problem = studentPasswordProblem(input.password);
 	if (problem) throw new ValidationError(problem, 'password');
 	const [row] = await db
@@ -89,7 +94,8 @@ export async function createStudent(db: Db, teacherId: string, input: StudentInp
 export async function updateStudent(db: Db, teacherId: string, id: string, input: StudentInput) {
 	const c = clean(input);
 	const username = checkUsername(input.username);
-	if (await isUsernameTaken(db, username, id)) throw new ValidationError('Benutzername ist vergeben.', 'username');
+	if (await isUsernameTaken(db, username, id))
+		throw new ValidationError('Benutzername ist vergeben.', 'username');
 	const res = await db
 		.update(student)
 		.set({ ...c, username, settings: sanitizeLayer(input.settings ?? {}), updatedAt: new Date() })
@@ -99,7 +105,12 @@ export async function updateStudent(db: Db, teacherId: string, id: string, input
 	await audit(db, teacherId, 'student.update', 'student', id);
 }
 
-export async function resetStudentPassword(db: Db, teacherId: string, id: string, password: string) {
+export async function resetStudentPassword(
+	db: Db,
+	teacherId: string,
+	id: string,
+	password: string
+) {
 	const problem = studentPasswordProblem(password);
 	if (problem) throw new ValidationError(problem, 'password');
 	const res = await db
@@ -125,5 +136,8 @@ export async function setCar(db: Db, studentId: string, model: string, color: st
 	if (!CAR_MODELS.some((m) => m.id === model) || !CAR_COLORS.some((c) => c.id === color)) {
 		throw new ValidationError('Unbekanntes Auto.');
 	}
-	await db.update(student).set({ car: { model, color }, updatedAt: new Date() }).where(eq(student.id, studentId));
+	await db
+		.update(student)
+		.set({ car: { model, color }, updatedAt: new Date() })
+		.where(eq(student.id, studentId));
 }

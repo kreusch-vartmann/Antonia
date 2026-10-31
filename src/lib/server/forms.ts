@@ -9,7 +9,8 @@ export async function guarded<T, V extends Record<string, unknown> = Record<neve
 	try {
 		return await fn();
 	} catch (e) {
-		if (e instanceof ValidationError) return fail(400, { ...values, error: e.message, field: e.field });
+		if (e instanceof ValidationError)
+			return fail(400, { ...values, error: e.message, field: e.field });
 		throw e;
 	}
 }

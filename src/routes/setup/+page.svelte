@@ -12,7 +12,8 @@
 		<h1>Ersteinrichtung</h1>
 		{#if !data.tokenConfigured}
 			<p class="notice">
-				Die Einrichtung ist gesperrt. Setze in Coolify die Umgebungsvariable <code>SETUP_TOKEN</code>
+				Die Einrichtung ist gesperrt. Setze in Coolify die Umgebungsvariable <code>SETUP_TOKEN</code
+				>
 				(mind. 16 zufällige Zeichen), starte die App neu und rufe diese Seite erneut auf.
 			</p>
 		{:else}
@@ -38,11 +39,23 @@
 				</label>
 				<label class="field">
 					<span>Passwort (mind. 10 Zeichen)</span>
-					<input name="password" type="password" required minlength="10" autocomplete="new-password" />
+					<input
+						name="password"
+						type="password"
+						required
+						minlength="10"
+						autocomplete="new-password"
+					/>
 				</label>
 				<label class="field">
 					<span>Passwort wiederholen</span>
-					<input name="password2" type="password" required minlength="10" autocomplete="new-password" />
+					<input
+						name="password2"
+						type="password"
+						required
+						minlength="10"
+						autocomplete="new-password"
+					/>
 				</label>
 				{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
 				<button class="btn btn-primary big">Konto anlegen</button>

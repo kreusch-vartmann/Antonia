@@ -69,7 +69,10 @@ export const student = pgTable(
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
-	(t) => [uniqueIndex('student_username_uq').on(t.username), index('student_teacher_idx').on(t.teacherId)]
+	(t) => [
+		uniqueIndex('student_username_uq').on(t.username),
+		index('student_teacher_idx').on(t.teacherId)
+	]
 );
 
 export const task = pgTable(
@@ -143,10 +146,7 @@ export const assignment = pgTable(
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
-	(t) => [
-		index('assignment_student_idx').on(t.studentId),
-		index('assignment_set_idx').on(t.setId)
-	]
+	(t) => [index('assignment_student_idx').on(t.studentId), index('assignment_set_idx').on(t.setId)]
 );
 
 export type RunStatus = 'running' | 'finished' | 'aborted' | 'timeUp';

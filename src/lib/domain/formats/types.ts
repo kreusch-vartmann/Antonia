@@ -27,8 +27,7 @@ export interface ArithmeticContent {
 export type TaskContent = ArithmeticContent;
 
 export type TaskOrigin =
-	| { kind: 'manual' }
-	| { kind: 'generator'; generator: string; params: Record<string, unknown> };
+	{ kind: 'manual' } | { kind: 'generator'; generator: string; params: Record<string, unknown> };
 
 export type HintVisual =
 	| { kind: 'dots'; rows: number; cols: number }

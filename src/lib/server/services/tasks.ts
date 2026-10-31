@@ -16,7 +16,10 @@ export interface TaskInput {
 }
 
 export function normalizeTags(tags: string[] | undefined): string[] {
-	return [...new Set((tags ?? []).map((t) => t.trim()).filter((t) => t && t.length <= 40))].slice(0, 20);
+	return [...new Set((tags ?? []).map((t) => t.trim()).filter((t) => t && t.length <= 40))].slice(
+		0,
+		20
+	);
 }
 
 export function parseTagString(s: string | null | undefined): string[] {
@@ -70,7 +73,10 @@ export async function updateTask(db: Db, teacherId: string, id: string, input: T
 }
 
 export async function getTask(db: Db, teacherId: string, id: string) {
-	const [t] = await db.select().from(task).where(and(eq(task.id, id), eq(task.teacherId, teacherId)));
+	const [t] = await db
+		.select()
+		.from(task)
+		.where(and(eq(task.id, id), eq(task.teacherId, teacherId)));
 	return t ?? null;
 }
 
@@ -87,7 +93,9 @@ export async function listTasks(db: Db, teacherId: string, f: TaskFilter = {}) {
 	if (f.op) conds.push(sql`${task.content}->'expr'->>'op' = ${f.op}`);
 	if (f.q) {
 		const like = `%${f.q.replace(/[%_\\]/g, '\\$&')}%`;
-		conds.push(sql`(${task.content}::text ilike ${like} or array_to_string(${task.tags}, ',') ilike ${like})`);
+		conds.push(
+			sql`(${task.content}::text ilike ${like} or array_to_string(${task.tags}, ',') ilike ${like})`
+		);
 	}
 	if (f.ids) conds.push(f.ids.length ? inArray(task.id, f.ids) : sql`false`);
 	return db
@@ -129,6 +137,9 @@ export async function addTagToTasks(db: Db, teacherId: string, ids: string[], ta
 	if (!t || ids.length === 0) return;
 	await db
 		.update(task)
-		.set({ tags: sql`array(select distinct unnest(array_append(${task.tags}, ${t})))`, updatedAt: new Date() })
+		.set({
+			tags: sql`array(select distinct unnest(array_append(${task.tags}, ${t})))`,
+			updatedAt: new Date()
+		})
 		.where(and(eq(task.teacherId, teacherId), inArray(task.id, ids)));
 }

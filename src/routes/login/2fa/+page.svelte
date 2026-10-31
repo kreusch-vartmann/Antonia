@@ -10,7 +10,9 @@
 <main class="center-page">
 	<div class="card narrow">
 		<h1>Zwei-Faktor-Anmeldung</h1>
-		<p>Gib den 6-stelligen Code aus deiner Authenticator-App ein – oder einen Wiederherstellungscode.</p>
+		<p>
+			Gib den 6-stelligen Code aus deiner Authenticator-App ein – oder einen Wiederherstellungscode.
+		</p>
 		<form method="POST" use:enhance class="stack">
 			<label class="field">
 				<span>Code</span>

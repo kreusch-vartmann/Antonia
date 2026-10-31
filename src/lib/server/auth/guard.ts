@@ -46,6 +46,7 @@ export function kv() {
 
 /** Only allow local redirect targets. */
 export function safeNext(next: string | null, fallback: string): string {
-	if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) return fallback;
+	if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\'))
+		return fallback;
 	return next;
 }

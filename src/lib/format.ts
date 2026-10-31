@@ -31,7 +31,10 @@ export function dateTime(d: Date | string | null | undefined): string {
 
 export function date(d: Date | string | null | undefined): string {
 	if (!d) return '–';
-	const v = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T12:00:00`) : new Date(d);
+	const v =
+		typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+			? new Date(`${d}T12:00:00`)
+			: new Date(d);
 	return v.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' });
 }
 

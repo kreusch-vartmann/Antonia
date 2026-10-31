@@ -305,7 +305,8 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 export function formatSettingValue(key: SettingKey, value: unknown): string {
 	const meta = SETTING_META[key];
 	if (meta.type === 'boolean') return value ? 'ja' : 'nein';
-	if (meta.type === 'enum') return meta.options?.find((o) => o.value === value)?.label ?? String(value);
+	if (meta.type === 'enum')
+		return meta.options?.find((o) => o.value === value)?.label ?? String(value);
 	if (meta.unit && value === 0) return 'aus';
 	return meta.unit ? `${value} ${meta.unit}` : String(value);
 }

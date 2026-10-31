@@ -37,7 +37,13 @@ describe('generators', () => {
 			expect((a % 10) + (b % 10)).toBeGreaterThanOrEqual(10);
 			expect(d.content.answer).toBeLessThanOrEqual(20);
 		}
-		const without = generateAddSub({ op: '-', max: 100, count: 10, transition: 'without', seed: 3 });
+		const without = generateAddSub({
+			op: '-',
+			max: 100,
+			count: 10,
+			transition: 'without',
+			seed: 3
+		});
 		for (const d of without) {
 			const { a, b } = d.content.expr!;
 			expect(a % 10).toBeGreaterThanOrEqual(b % 10);

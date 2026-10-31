@@ -20,7 +20,14 @@
 
 <section class="card stack">
 	<h2>Stammdaten & Einstellungen</h2>
-	<form method="POST" action="?/update" use:enhance={() => async ({ update }) => update({ reset: false })} class="stack">
+	<form
+		method="POST"
+		action="?/update"
+		use:enhance={() =>
+			async ({ update }) =>
+				update({ reset: false })}
+		class="stack"
+	>
 		{#key s.updatedAt}
 			<StudentFields
 				values={s}
@@ -37,16 +44,29 @@
 <section class="card stack">
 	<h2>Zuweisungen</h2>
 	{#if data.assignments.length === 0}
-		<p class="muted">Noch keine Aufgabensets zugewiesen. <a href="/lehrkraft/sets">Zu den Sets</a></p>
+		<p class="muted">
+			Noch keine Aufgabensets zugewiesen. <a href="/lehrkraft/sets">Zu den Sets</a>
+		</p>
 	{:else}
 		<div class="table-wrap">
 			<table>
-				<thead><tr><th>Set</th><th>Zeitraum</th><th class="num">Rennen</th><th>Beste</th><th></th></tr></thead>
+				<thead
+					><tr><th>Set</th><th>Zeitraum</th><th class="num">Rennen</th><th>Beste</th><th></th></tr
+					></thead
+				>
 				<tbody>
 					{#each data.assignments as a (a.id)}
 						<tr class:archived={a.archived}>
-							<td><a href="/lehrkraft/sets/{a.setId}">{a.setName}</a>{a.archived ? ' (beendet)' : ''}</td>
-							<td>{a.startsOn ? date(a.startsOn) : 'ab sofort'} – {a.endsOn ? date(a.endsOn) : 'offen'}</td>
+							<td
+								><a href="/lehrkraft/sets/{a.setId}">{a.setName}</a>{a.archived
+									? ' (beendet)'
+									: ''}</td
+							>
+							<td
+								>{a.startsOn ? date(a.startsOn) : 'ab sofort'} – {a.endsOn
+									? date(a.endsOn)
+									: 'offen'}</td
+							>
 							<td class="num">{a.runs}</td>
 							<td>{stars(a.bestStars)}</td>
 							<td><a class="btn small" href="/lehrkraft/zuweisungen/{a.id}">Einstellungen</a></td>
@@ -64,7 +84,13 @@
 	<form method="POST" action="?/password" use:enhance class="row">
 		<label class="field">
 			<span>Neues Passwort</span>
-			<input name="password" required minlength="4" value={data.suggestedPassword} autocomplete="off" />
+			<input
+				name="password"
+				required
+				minlength="4"
+				value={data.suggestedPassword}
+				autocomplete="off"
+			/>
 		</label>
 		<button class="btn">Passwort setzen</button>
 	</form>

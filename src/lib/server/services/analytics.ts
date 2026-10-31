@@ -54,8 +54,14 @@ export function summarize(events: EventRow[]) {
 		list.push(e);
 		pres.set(k, list);
 	}
-	const fam = new Map<string, { tasks: number; firstTry: number; ms: number[]; hint: number; solution: number }>();
-	const taskStats = new Map<string, { label: string; tasks: number; errors: number; firstTry: number }>();
+	const fam = new Map<
+		string,
+		{ tasks: number; firstTry: number; ms: number[]; hint: number; solution: number }
+	>();
+	const taskStats = new Map<
+		string,
+		{ label: string; tasks: number; errors: number; firstTry: number }
+	>();
 	const weekly = new Map<string, { tasks: number; firstTry: number }>();
 	let tasks = 0;
 	let firstTry = 0;
@@ -120,18 +126,29 @@ export function summarize(events: EventRow[]) {
 		firstTryRate: tasks ? firstTry / tasks : 0,
 		medianMs: median(allMs),
 		families,
-		patterns: [...patterns.entries()].sort((a, b) => b[1] - a[1]).map(([pattern, count]) => ({ pattern, count })),
+		patterns: [...patterns.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([pattern, count]) => ({ pattern, count })),
 		hardest: [...taskStats.values()]
 			.filter((t) => t.errors > 0)
 			.sort((a, b) => b.errors - a.errors || a.firstTry / a.tasks - b.firstTry / b.tasks)
 			.slice(0, 10),
 		weekly: [...weekly.entries()]
 			.sort((a, b) => a[0].localeCompare(b[0]))
-			.map(([week, w]) => ({ week, tasks: w.tasks, firstTryRate: w.tasks ? w.firstTry / w.tasks : 0 }))
+			.map(([week, w]) => ({
+				week,
+				tasks: w.tasks,
+				firstTryRate: w.tasks ? w.firstTry / w.tasks : 0
+			}))
 	};
 }
 
-async function eventsFor(db: Db, teacherId: string, studentIds: string[], p: Period): Promise<EventRow[]> {
+async function eventsFor(
+	db: Db,
+	teacherId: string,
+	studentIds: string[],
+	p: Period
+): Promise<EventRow[]> {
 	if (studentIds.length === 0) return [];
 	const rows = await db
 		.select({ e: answerEvent, startedAt: run.startedAt, setName: taskSet.name })
@@ -139,7 +156,9 @@ async function eventsFor(db: Db, teacherId: string, studentIds: string[], p: Per
 		.innerJoin(run, eq(run.id, answerEvent.runId))
 		.innerJoin(student, eq(student.id, run.studentId))
 		.innerJoin(taskSet, eq(taskSet.id, run.setId))
-		.where(and(eq(student.teacherId, teacherId), inArray(run.studentId, studentIds), ...periodConds(p)))
+		.where(
+			and(eq(student.teacherId, teacherId), inArray(run.studentId, studentIds), ...periodConds(p))
+		)
 		.orderBy(run.startedAt, answerEvent.seq);
 	return rows.map((r) => ({ ...r.e, startedAt: r.startedAt, setName: r.setName }));
 }
@@ -193,7 +212,11 @@ export async function runDetail(db: Db, teacherId: string, runId: string) {
 		.innerJoin(taskSet, eq(taskSet.id, run.setId))
 		.where(and(eq(run.id, runId), eq(student.teacherId, teacherId)));
 	if (!r) return null;
-	const events = await db.select().from(answerEvent).where(eq(answerEvent.runId, runId)).orderBy(answerEvent.seq);
+	const events = await db
+		.select()
+		.from(answerEvent)
+		.where(eq(answerEvent.runId, runId))
+		.orderBy(answerEvent.seq);
 	return { ...r, events };
 }
 
@@ -216,7 +239,12 @@ export async function exportCsv(db: Db, teacherId: string, studentIds: string[],
 	const names = new Map(owned.map((s) => [s.id, s.displayName]));
 	const rows = owned.length
 		? await db
-				.select({ e: answerEvent, startedAt: run.startedAt, setName: taskSet.name, studentId: run.studentId })
+				.select({
+					e: answerEvent,
+					startedAt: run.startedAt,
+					setName: taskSet.name,
+					studentId: run.studentId
+				})
 				.from(answerEvent)
 				.innerJoin(run, eq(run.id, answerEvent.runId))
 				.innerJoin(taskSet, eq(taskSet.id, run.setId))
@@ -286,7 +314,10 @@ export async function exportStudentJson(db: Db, teacherId: string, studentId: st
 		.from(student)
 		.where(and(eq(student.id, studentId), eq(student.teacherId, teacherId)));
 	if (!s) return null;
-	const assignments = await db.select().from(schema.assignment).where(eq(schema.assignment.studentId, studentId));
+	const assignments = await db
+		.select()
+		.from(schema.assignment)
+		.where(eq(schema.assignment.studentId, studentId));
 	const runs = await db.select().from(run).where(eq(run.studentId, studentId));
 	const runIds = runs.map((r) => r.id);
 	const answers = runIds.length

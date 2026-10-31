@@ -33,12 +33,12 @@
 	}: Props = $props();
 
 	const groups = $derived.by(() => {
-		const g = new Map<string, SettingKey[]>();
+		const g: Record<string, SettingKey[]> = {};
 		for (const k of keys) {
 			const name = SETTING_META[k].group;
-			g.set(name, [...(g.get(name) ?? []), k]);
+			(g[name] ??= []).push(k);
 		}
-		return [...g.entries()];
+		return Object.entries(g);
 	});
 
 	const setCount = $derived(keys.filter((k) => layer[k] !== undefined).length);

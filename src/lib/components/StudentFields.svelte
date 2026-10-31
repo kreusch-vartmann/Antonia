@@ -44,7 +44,13 @@
 <div class="grid-2">
 	<label class="field">
 		<span>Vorname *</span>
-		<input name="firstName" required maxlength="60" bind:value={firstName} aria-invalid={field === 'firstName'} />
+		<input
+			name="firstName"
+			required
+			maxlength="60"
+			bind:value={firstName}
+			aria-invalid={field === 'firstName'}
+		/>
 	</label>
 	<label class="field">
 		<span>Nachname (optional)</span>
@@ -52,7 +58,12 @@
 	</label>
 	<label class="field">
 		<span>Anzeigename</span>
-		<input name="displayName" maxlength="40" value={values.displayName ?? ''} placeholder="wie Vorname" />
+		<input
+			name="displayName"
+			maxlength="40"
+			value={values.displayName ?? ''}
+			placeholder="wie Vorname"
+		/>
 		<small>Wird dem Kind angezeigt.</small>
 	</label>
 	<label class="field">
@@ -75,9 +86,6 @@
 	<small>Bitte keine Diagnosen oder Gesundheitsdaten eintragen.</small>
 </label>
 
-<SettingsEditor
-	layer={settings}
-	title="Einstellungen für dieses Kind (z. B. Nachteilsausgleich)"
-/>
+<SettingsEditor layer={settings} title="Einstellungen für dieses Kind (z. B. Nachteilsausgleich)" />
 
 {#if error}<p class="error" role="alert">{error}</p>{/if}

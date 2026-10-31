@@ -16,13 +16,17 @@ export const actions: Actions = {
 		const form = await event.request.formData();
 		const username = String(form.get('username') ?? '');
 		const password = String(form.get('password') ?? '');
-		if (!username || !password) return fail(400, { username, error: 'Bitte Benutzername und Passwort eingeben.' });
+		if (!username || !password)
+			return fail(400, { username, error: 'Bitte Benutzername und Passwort eingeben.' });
 
 		const r = await login(db(), kv(), { username, password, ip: event.getClientAddress() });
 		if (!r.ok) {
 			if (r.error === 'locked') {
 				const min = Math.ceil((r.retryAfter ?? 900) / 60);
-				return fail(429, { username, error: `Zu viele Versuche. Bitte in ${min} Minuten erneut versuchen.` });
+				return fail(429, {
+					username,
+					error: `Zu viele Versuche. Bitte in ${min} Minuten erneut versuchen.`
+				});
 			}
 			return fail(400, { username, error: 'Benutzername oder Passwort stimmt nicht.' });
 		}
@@ -35,7 +39,10 @@ export const actions: Actions = {
 				sameSite: 'strict',
 				maxAge: 300
 			});
-			redirect(303, `/login/2fa?next=${encodeURIComponent(event.url.searchParams.get('next') ?? '')}`);
+			redirect(
+				303,
+				`/login/2fa?next=${encodeURIComponent(event.url.searchParams.get('next') ?? '')}`
+			);
 		}
 		await startSession(event, r.role, r.userId);
 		if (r.role === 'teacher') {
