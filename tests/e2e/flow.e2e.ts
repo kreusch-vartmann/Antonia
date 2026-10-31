@@ -38,7 +38,7 @@ test('teacher sets up account, child, set and assignment', async ({ page }) => {
 	} else {
 		await page.goto('/login');
 		await page.getByLabel('Benutzername').fill(TEACHER.username);
-		await page.getByLabel('Passwort').fill(TEACHER.password);
+		await page.getByLabel('Passwort', { exact: true }).fill(TEACHER.password);
 		await page.getByRole('button', { name: 'Anmelden' }).click();
 	}
 	await expect(page.getByRole('heading', { name: /Hallo/ })).toBeVisible();
@@ -58,6 +58,15 @@ test('teacher sets up account, child, set and assignment', async ({ page }) => {
 	await page.locator('input[name="p.to"]').fill('3');
 	await page.getByRole('button', { name: 'Vorschau erzeugen' }).click();
 	await expect(page.getByRole('heading', { name: /Vorschau \(3 Aufgaben\)/ })).toBeVisible();
+	// Improvement 2: warn while the calculation does not add up
+	const answer0 = page.locator('input[name="d.0.answer"]');
+	await answer0.fill('99');
+	await expect(page.getByText('Die Rechnung geht nicht auf.')).toBeVisible();
+	await expect(page.getByText('1 · 5 = 99 geht nicht auf.')).toBeVisible();
+	await expect(page.getByText(/Bei 1 Aufgabe\(n\) geht die Rechnung nicht auf/)).toBeVisible();
+	if (shots) await page.screenshot({ path: `${shots}/02b-generator-warning.png`, fullPage: true });
+	await answer0.fill('5');
+	await expect(page.getByText('Die Rechnung geht nicht auf.')).toHaveCount(0);
 	if (shots) await page.screenshot({ path: `${shots}/02-generator.png`, fullPage: true });
 	await page.getByRole('button', { name: 'Speichern', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Einmaleins 5er-Reihe' })).toBeVisible();
@@ -75,8 +84,15 @@ test('teacher sets up account, child, set and assignment', async ({ page }) => {
 
 test('child races and finishes', async ({ page }) => {
 	await page.goto('/login');
+	// Improvement 1: show/hide password
+	const pw = page.getByLabel('Passwort', { exact: true });
+	await expect(pw).toHaveAttribute('type', 'password');
+	await page.getByRole('button', { name: 'Passwort anzeigen' }).click();
+	await expect(pw).toHaveAttribute('type', 'text');
+	await page.getByRole('button', { name: 'Passwort verbergen' }).click();
+	await expect(pw).toHaveAttribute('type', 'password');
 	await page.getByLabel('Benutzername').fill('testkind');
-	await page.getByLabel('Passwort').fill(kidPassword);
+	await page.getByLabel('Passwort', { exact: true }).fill(kidPassword);
 	await page.getByRole('button', { name: 'Anmelden' }).click();
 	await expect(page.getByRole('heading', { name: 'Hallo Testkind!' })).toBeVisible();
 	if (shots) await page.screenshot({ path: `${shots}/04-kid-home.png`, fullPage: true });
@@ -113,7 +129,7 @@ test('child races and finishes', async ({ page }) => {
 test('teacher sees the evaluation', async ({ page }) => {
 	await page.goto('/login');
 	await page.getByLabel('Benutzername').fill(TEACHER.username);
-	await page.getByLabel('Passwort').fill(TEACHER.password);
+	await page.getByLabel('Passwort', { exact: true }).fill(TEACHER.password);
 	await page.getByRole('button', { name: 'Anmelden' }).click();
 	await expect(page.getByRole('heading', { name: /Hallo/ })).toBeVisible();
 	await page.goto('/lehrkraft/auswertung');

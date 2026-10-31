@@ -72,6 +72,52 @@ export function expectedAnswer(expr: { a: number; op: Op; b: number; gap: Gap })
 	return computeResult(expr.a, expr.op, expr.b);
 }
 
+export type Consistency =
+	| { status: 'ok' }
+	| { status: 'incomplete' }
+	| { status: 'invalid'; message: string }
+	| { status: 'mismatch'; message: string; correct: number };
+
+/**
+ * Checks whether an expression with a gap and a teacher-entered answer is
+ * arithmetically consistent, e.g. "3 · 5 = 16" is not.
+ * Used by the editors to warn until the teacher has corrected the values.
+ */
+export function checkConsistency(input: {
+	a: number | null;
+	op: Op;
+	b: number | null;
+	gap: Gap;
+	answer: number | null;
+}): Consistency {
+	const { a, op, b, gap, answer } = input;
+	if (a === null || b === null || ![a, b].every((n) => Number.isFinite(n))) {
+		return { status: 'incomplete' };
+	}
+	const r = computeResult(a, op, b);
+	if (r === null) {
+		return {
+			status: 'invalid',
+			message:
+				op === ':'
+					? `${a} : ${b} geht nicht ohne Rest auf (oder Teiler ist 0).`
+					: `${a} − ${b} ergäbe eine negative Zahl.`
+		};
+	}
+	if (answer === null || !Number.isFinite(answer)) return { status: 'incomplete' };
+	const A = gap === 'a' ? answer : a;
+	const B = gap === 'b' ? answer : b;
+	const R = gap === 'result' ? answer : r;
+	const filled = computeResult(A, op, B);
+	if (filled === R) return { status: 'ok' };
+	const s = OP_SYMBOL[op];
+	return {
+		status: 'mismatch',
+		correct: expectedAnswer({ a, op, b, gap }) ?? r,
+		message: `${A} ${s} ${B} = ${R} geht nicht auf.`
+	};
+}
+
 function parseGiven(given: string): number | null {
 	const t = given.trim();
 	if (!/^\d{1,6}$/.test(t)) return null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arithmetic, computeResult } from './arithmetic';
+import { arithmetic, checkConsistency, computeResult } from './arithmetic';
 import type { ArithmeticContent } from './types';
 import { rng } from '../random';
 
@@ -111,5 +111,28 @@ describe('arithmetic format', () => {
 		expect(computeResult(10, ':', 3)).toBeNull();
 		expect(computeResult(10, ':', 0)).toBeNull();
 		expect(computeResult(12, ':', 3)).toBe(4);
+	});
+
+	it('checkConsistency warns while the calculation does not add up', () => {
+		const base = { a: 3, op: '*' as const, b: 5, gap: 'result' as const };
+		expect(checkConsistency({ ...base, answer: 15 })).toEqual({ status: 'ok' });
+		expect(checkConsistency({ ...base, answer: 16 })).toMatchObject({
+			status: 'mismatch',
+			correct: 15,
+			message: '3 · 5 = 16 geht nicht auf.'
+		});
+		// gap in the first number: "? · 5 = 15" (a = 3). Answer 4 does not fit.
+		expect(checkConsistency({ ...base, gap: 'a', answer: 3 })).toEqual({ status: 'ok' });
+		expect(checkConsistency({ ...base, gap: 'a', answer: 4 })).toMatchObject({
+			status: 'mismatch',
+			correct: 3
+		});
+		expect(checkConsistency({ a: 3, op: '-', b: 5, gap: 'result', answer: 0 }).status).toBe(
+			'invalid'
+		);
+		expect(checkConsistency({ a: 7, op: ':', b: 2, gap: 'result', answer: 3 }).status).toBe(
+			'invalid'
+		);
+		expect(checkConsistency({ ...base, b: null, answer: 15 }).status).toBe('incomplete');
 	});
 });

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import PasswordField from '#lib/components/PasswordField.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -19,10 +20,13 @@
 		{:else}
 			<p>Lege das Lehrkraft-Konto an. Danach ist diese Seite deaktiviert.</p>
 			<form method="POST" use:enhance class="stack">
-				<label class="field">
-					<span>Einrichtungs-Token (aus Coolify)</span>
-					<input name="token" type="password" required autocomplete="off" />
-				</label>
+				<PasswordField
+					name="token"
+					label="Einrichtungs-Token (aus Coolify)"
+					autocomplete="off"
+					ignoreManagers
+					hint="Nur zur Einrichtung. Wird nicht dein Passwort."
+				/>
 				<label class="field">
 					<span>Dein Name (wird nur dir angezeigt)</span>
 					<input name="displayName" required value={form?.displayName ?? ''} />
@@ -37,26 +41,18 @@
 						value={form?.username ?? ''}
 					/>
 				</label>
-				<label class="field">
-					<span>Passwort (mind. 10 Zeichen)</span>
-					<input
-						name="password"
-						type="password"
-						required
-						minlength="10"
-						autocomplete="new-password"
-					/>
-				</label>
-				<label class="field">
-					<span>Passwort wiederholen</span>
-					<input
-						name="password2"
-						type="password"
-						required
-						minlength="10"
-						autocomplete="new-password"
-					/>
-				</label>
+				<PasswordField
+					name="password"
+					label="Passwort (mind. 10 Zeichen)"
+					autocomplete="new-password"
+					minlength={10}
+				/>
+				<PasswordField
+					name="password2"
+					label="Passwort wiederholen"
+					autocomplete="new-password"
+					minlength={10}
+				/>
 				{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
 				<button class="btn btn-primary big">Konto anlegen</button>
 			</form>

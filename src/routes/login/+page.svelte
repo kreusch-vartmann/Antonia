@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import PasswordField from '#lib/components/PasswordField.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -38,10 +39,7 @@
 					value={form?.username ?? ''}
 				/>
 			</label>
-			<label class="field">
-				<span>Passwort</span>
-				<input name="password" type="password" autocomplete="current-password" required />
-			</label>
+			<PasswordField name="password" label="Passwort" autocomplete="current-password" />
 			{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
 			<button class="btn btn-primary big" disabled={busy}>Anmelden</button>
 		</form>

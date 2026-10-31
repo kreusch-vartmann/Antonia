@@ -1,7 +1,12 @@
 <script lang="ts">
 	import type { ArithmeticContent, Gap, Op } from '#lib/domain/formats/types.ts';
-	import { expectedAnswer, OP_SYMBOL } from '#lib/domain/formats/arithmetic.ts';
-	import { arithmetic } from '#lib/domain/formats/arithmetic.ts';
+	import {
+		arithmetic,
+		checkConsistency,
+		expectedAnswer,
+		OP_SYMBOL
+	} from '#lib/domain/formats/arithmetic.ts';
+	import CalcWarning from './CalcWarning.svelte';
 
 	interface Props {
 		content?: ArithmeticContent;
@@ -26,6 +31,10 @@
 
 	const computed = $derived(
 		mode !== 'text' && a !== null && b !== null ? expectedAnswer({ a, op, b, gap }) : null
+	);
+
+	const consistency = $derived(
+		mode !== 'text' ? checkConsistency({ a, op, b, gap, answer }) : ({ status: 'ok' } as const)
 	);
 
 	$effect(() => {
@@ -113,9 +122,7 @@
 				bind:value={answer}
 				oninput={() => (answerTouched = true)}
 			/>
-			{#if computed !== null && answer !== null && answer !== computed}
-				<small class="warn">Achtung: Rechnerisch wäre die Antwort {computed}.</small>
-			{/if}
+			<CalcWarning result={consistency} />
 		</label>
 		<label class="field">
 			<span>Falsche Antwortmöglichkeiten (optional)</span>
@@ -153,7 +160,7 @@
 	{#if preview}
 		<div class="preview" aria-live="polite">
 			{#if 'error' in preview}
-				<span class="error">{preview.error}</span>
+				{#if consistency.status !== 'invalid'}<span class="error">{preview.error}</span>{/if}
 			{:else}
 				<strong>Vorschau:</strong>
 				{preview.label}
@@ -168,9 +175,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
 		gap: var(--space-3);
-	}
-	.warn {
-		color: var(--color-hint) !important;
 	}
 	.preview {
 		background: #f3f6fb;

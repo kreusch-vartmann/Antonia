@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { dateTime } from '#lib/format.ts';
+	import PasswordField from '#lib/components/PasswordField.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -15,32 +16,19 @@
 <section class="card stack">
 	<h2>Passwort ändern</h2>
 	<form method="POST" action="?/password" use:enhance class="stack narrow-form">
-		<label class="field"
-			><span>Aktuelles Passwort</span><input
-				type="password"
-				name="current"
-				required
-				autocomplete="current-password"
-			/></label
-		>
-		<label class="field"
-			><span>Neues Passwort (mind. 10 Zeichen)</span><input
-				type="password"
-				name="next"
-				required
-				minlength="10"
-				autocomplete="new-password"
-			/></label
-		>
-		<label class="field"
-			><span>Neues Passwort wiederholen</span><input
-				type="password"
-				name="next2"
-				required
-				minlength="10"
-				autocomplete="new-password"
-			/></label
-		>
+		<PasswordField name="current" label="Aktuelles Passwort" autocomplete="current-password" />
+		<PasswordField
+			name="next"
+			label="Neues Passwort (mind. 10 Zeichen)"
+			autocomplete="new-password"
+			minlength={10}
+		/>
+		<PasswordField
+			name="next2"
+			label="Neues Passwort wiederholen"
+			autocomplete="new-password"
+			minlength={10}
+		/>
 		{#if form?.pwError}<p class="error">{form.pwError}</p>{/if}
 		{#if form?.pwSaved}<p class="success">
 				Passwort geändert. Andere Geräte wurden abgemeldet.
@@ -63,13 +51,11 @@
 	{:else if t.totpEnabled}
 		<p>2FA ist <strong>aktiv</strong>. Verbleibende Wiederherstellungscodes: {t.recoveryLeft}</p>
 		<form method="POST" action="?/disableTotp" use:enhance class="row">
-			<label class="field"
-				><span>Passwort zur Bestätigung</span><input
-					type="password"
-					name="password"
-					required
-				/></label
-			>
+			<PasswordField
+				name="password"
+				label="Passwort zur Bestätigung"
+				autocomplete="current-password"
+			/>
 			<button class="btn btn-danger">2FA deaktivieren</button>
 		</form>
 		{#if form?.disableError}<p class="error">{form.disableError}</p>{/if}

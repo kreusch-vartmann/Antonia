@@ -1,6 +1,6 @@
 <script lang="ts">
 	interface Props {
-		name: 'speaker' | 'flag' | 'clock' | 'fuel';
+		name: 'speaker' | 'flag' | 'clock' | 'fuel' | 'eye' | 'eye-off';
 		size?: number;
 	}
 	let { name, size = 22 }: Props = $props();
@@ -30,6 +30,30 @@
 			{/each}
 		{/each}
 		<rect x="5" y="3" width="16" height="12" fill="none" stroke="currentColor" stroke-width="0.8" />
+	{:else if name === 'eye'}
+		<path
+			d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linejoin="round"
+		/>
+		<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2" />
+	{:else if name === 'eye-off'}
+		<path
+			d="M1.5 12S5.5 5 12 5c2 0 3.8.7 5.3 1.6M22.5 12S18.5 19 12 19c-2 0-3.8-.7-5.3-1.6"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linejoin="round"
+		/>
+		<path
+			d="M9.9 9.9a3.2 3.2 0 0 0 4.2 4.2M3 3l18 18"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+		/>
 	{:else if name === 'clock'}
 		<circle cx="12" cy="13" r="8" fill="none" stroke="currentColor" stroke-width="2" />
 		<path

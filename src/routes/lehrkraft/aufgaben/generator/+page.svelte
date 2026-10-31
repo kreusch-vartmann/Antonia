@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { OP_SYMBOL } from '#lib/domain/formats/arithmetic.ts';
 	import type { ArithmeticContent } from '#lib/domain/formats/types.ts';
+	import DraftRow from '#lib/components/DraftRow.svelte';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
@@ -16,8 +16,20 @@
 		origin: unknown;
 	}
 	let preview = $state<Preview | null>(null);
+	let lastForm: unknown = null;
+	let previewId = $state(0);
+	let problems = $state<Record<number, boolean>>({});
+	const problemCount = $derived(Object.values(problems).filter(Boolean).length);
+	function setProblem(i: number, p: boolean) {
+		if (problems[i] !== p) problems[i] = p;
+	}
 	$effect(() => {
-		if (form && 'drafts' in form && form.drafts) preview = form as Preview;
+		if (form && 'drafts' in form && form.drafts && form !== lastForm) {
+			lastForm = form;
+			preview = form as Preview;
+			previewId += 1;
+			problems = {};
+		}
 	});
 	const defaultSetName = $derived.by(() => {
 		if (!preview) return '';
@@ -220,64 +232,8 @@
 					>
 				</thead>
 				<tbody>
-					{#each preview.drafts as d, i (i)}
-						<tr>
-							<td
-								><input
-									type="checkbox"
-									name="d.{i}.include"
-									checked
-									aria-label="Aufgabe {i + 1} übernehmen"
-								/></td
-							>
-							<td
-								><input
-									class="n"
-									name="d.{i}.a"
-									type="number"
-									min="0"
-									value={d.expr?.a}
-									aria-label="Zahl 1"
-								/></td
-							>
-							<td>
-								<select name="d.{i}.op" aria-label="Rechenart">
-									{#each ['+', '-', '*', ':'] as const as o (o)}
-										<option value={o} selected={d.expr?.op === o}>{OP_SYMBOL[o]}</option>
-									{/each}
-								</select>
-							</td>
-							<td
-								><input
-									class="n"
-									name="d.{i}.b"
-									type="number"
-									min="0"
-									value={d.expr?.b}
-									aria-label="Zahl 2"
-								/></td
-							>
-							<td>
-								<select name="d.{i}.gap" aria-label="Gesucht">
-									<option value="result" selected={d.expr?.gap === 'result'}>Ergebnis</option>
-									<option value="a" selected={d.expr?.gap === 'a'}>Zahl 1</option>
-									<option value="b" selected={d.expr?.gap === 'b'}>Zahl 2</option>
-								</select>
-							</td>
-							<td
-								><input
-									class="n"
-									name="d.{i}.answer"
-									type="number"
-									min="0"
-									value={d.answer}
-									aria-label="Antwort"
-								/></td
-							>
-							<td
-								><input name="d.{i}.hint" placeholder="automatisch" aria-label="Eigene Hilfe" /></td
-							>
-						</tr>
+					{#each preview.drafts as d, i (previewId + '-' + i)}
+						<DraftRow index={i} draft={d} onstate={setProblem} />
 					{/each}
 				</tbody>
 			</table>
@@ -295,6 +251,12 @@
 				<input name="setName" value={defaultSetName} />
 			</label>
 		{/if}
+		{#if problemCount > 0}
+			<p class="calc-summary" role="status">
+				Bei {problemCount} Aufgabe(n) geht die Rechnung nicht auf. Bitte oben korrigieren oder die Aufgabe
+				abwählen.
+			</p>
+		{/if}
 		{#if form?.error}<p class="error">{form.error}</p>{/if}
 		<div><button class="btn btn-primary big">Speichern</button></div>
 	</form>
@@ -304,10 +266,13 @@
 	.preview {
 		margin-top: var(--space-8);
 	}
-	input.n {
-		width: 5.5rem;
-	}
-	td select {
-		width: auto;
+	.calc-summary {
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		border-radius: 0.5rem;
+		background: #fdecea;
+		color: #8a1c1c;
+		border: 1px solid #e3a9a4;
+		font-weight: 600;
 	}
 </style>
