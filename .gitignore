@@ -1,0 +1,55 @@
+# Office/LibreOffice Lock- und Temp-Dateien
+.~lock.*#
+~$*
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editoren/IDEs
+.vscode/
+.idea/
+*.swp
+
+# Umgebungsvariablen/Secrets
+.env
+.env.*
+!.env.example
+
+# Abhängigkeiten und Build-Artefakte
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+
+# Logs
+*.log
+
+# Projektdokumente (lokal halten)
+*.docx
+*.doc
+*.odt
+*.pdf
+*.xlsx
+*.csv
+
+# Datenbank-Dumps, Backups, Exporte
+*.sql
+*.dump
+*.bak
+*.rdb
+backups/
+exports/
+data/
+pgdata/
+
+# Schlüssel und Zertifikate
+*.pem
+*.key
+*.crt
+id_rsa*
+id_ed25519*
