@@ -1,0 +1,30 @@
+# Lokale Entwicklungsumgebung: PostgreSQL + Redis (die App läuft per `npm run dev`).
+# Start:  docker compose -f docker-compose.dev.yml up -d
+# Nur lokal verwenden – die Passwörter hier sind bewusst Entwicklungs-Platzhalter.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: antonia
+      POSTGRES_PASSWORD: dev_only_password
+      POSTGRES_DB: antonia
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata-dev:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U antonia']
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ['redis-server', '--requirepass', 'dev_only_password', '--appendonly', 'yes']
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis-dev:/data
+
+volumes:
+  pgdata-dev:
+  redis-dev:

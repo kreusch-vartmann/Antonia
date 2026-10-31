@@ -1,3 +1,5 @@
+# --- Grundregel: Niemals Personendaten, Secrets, Dumps oder Exporte committen ---
+
 # Office/LibreOffice Lock- und Temp-Dateien
 .~lock.*#
 ~$*
@@ -8,7 +10,8 @@
 Thumbs.db
 
 # Editoren/IDEs
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 *.swp
 
@@ -19,12 +22,17 @@ Thumbs.db
 
 # Abhängigkeiten und Build-Artefakte
 node_modules/
-__pycache__/
-*.pyc
-.venv/
-venv/
-dist/
-build/
+/.svelte-kit
+/build
+/dist
+.output
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Tests
+/test-results
+/playwright-report
+/coverage
 
 # Logs
 *.log
@@ -39,13 +47,14 @@ build/
 
 # Datenbank-Dumps, Backups, Exporte
 *.sql
+!/drizzle/**/*.sql
 *.dump
 *.bak
 *.rdb
-backups/
-exports/
-data/
-pgdata/
+/backups/
+/exports/
+/data/
+/pgdata/
 
 # Schlüssel und Zertifikate
 *.pem

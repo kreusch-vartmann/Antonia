@@ -1,0 +1,18 @@
+#!/bin/sh
+# Pre-commit: blockiert Commits mit Secrets (gitleaks) und erinnert an die Datenschutz-Grundregel.
+set -e
+
+if command -v gitleaks >/dev/null 2>&1; then
+	gitleaks git --staged --redact --no-banner --exit-code 1 .
+else
+	echo "WARNUNG: gitleaks nicht gefunden – Secret-Scan übersprungen." >&2
+	echo "Installieren: https://github.com/gitleaks/gitleaks/releases" >&2
+fi
+
+# Zusätzliche Sperre für Dateitypen, die nie ins Repo gehören.
+blocked=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(env|docx?|odt|pdf|xlsx|csv|dump|bak|rdb|pem|key)$|(^|/)\.env(\..*)?$' | grep -v '\.env\.example$' || true)
+if [ -n "$blocked" ]; then
+	echo "FEHLER: Diese Dateien dürfen nicht committet werden:" >&2
+	echo "$blocked" >&2
+	exit 1
+fi

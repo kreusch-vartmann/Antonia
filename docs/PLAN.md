@@ -18,23 +18,23 @@ Code von ANTON übernommen.
 
 ## 1. Entscheidungen
 
-| Thema | Entscheidung |
-|---|---|
-| Fach / Stufe | Mathe, Grundschule (Datenmodell bereitet weitere Fächer vor) |
-| Nutzer | zunächst eine Lehrkraft, mehrere Kinder; Mandantenfähigkeit vorbereitet (`teacher_id` überall) |
-| Geräte | PCs, Tablets (überwiegend iPads), ggf. Smartphones → responsive, touch-first, Safari/iPadOS als Hauptziel |
-| Kinder-Login | Benutzername + Passwort, von der Lehrkraft angelegt/zurückgesetzt; keine E-Mail |
-| Lehrkraft-Login | Benutzername/E-Mail + Passwort, **2FA (TOTP) optional** |
-| Personendaten | Vorname, Nachname optional, Anzeigename; Kinderansicht zeigt nur Anzeigenamen |
-| Hosting | Hostinger VPS (EU), Coolify, eigene HTTPS-Subdomain |
-| Container | App, PostgreSQL, Redis – jeweils eigener Container/eigene Coolify-Ressource |
-| PWA / Offline | vorerst nein; Offline später |
-| Vorlesen | Web Speech API des Browsers (de-DE) |
-| Rennen – Fehler | **Standard: Boxenstopp** (Auto bleibt stehen, Hilfe); optional „Zurückfallen“ (nie hinter Start) |
-| Rennen – Optik | Draufsicht (von oben); Kind wählt sein Auto |
-| Belohnung | Sterne (0–3) + eigene Bestleistung; keine Münzen, Shops, Ranglisten |
-| Aufgabenerstellung | manuell und per Generator; generierte Aufgaben einzeln anpassbar |
-| Einstellungen | pro Aufgabe, Set, Kind und Zuweisung (siehe Vererbung) |
+| Thema              | Entscheidung                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| Fach / Stufe       | Mathe, Grundschule (Datenmodell bereitet weitere Fächer vor)                                              |
+| Nutzer             | zunächst eine Lehrkraft, mehrere Kinder; Mandantenfähigkeit vorbereitet (`teacher_id` überall)            |
+| Geräte             | PCs, Tablets (überwiegend iPads), ggf. Smartphones → responsive, touch-first, Safari/iPadOS als Hauptziel |
+| Kinder-Login       | Benutzername + Passwort, von der Lehrkraft angelegt/zurückgesetzt; keine E-Mail                           |
+| Lehrkraft-Login    | Benutzername/E-Mail + Passwort, **2FA (TOTP) optional**                                                   |
+| Personendaten      | Vorname, Nachname optional, Anzeigename; Kinderansicht zeigt nur Anzeigenamen                             |
+| Hosting            | Hostinger VPS (EU), Coolify, eigene HTTPS-Subdomain                                                       |
+| Container          | App, PostgreSQL, Redis – jeweils eigener Container/eigene Coolify-Ressource                               |
+| PWA / Offline      | vorerst nein; Offline später                                                                              |
+| Vorlesen           | Web Speech API des Browsers (de-DE)                                                                       |
+| Rennen – Fehler    | **Standard: Boxenstopp** (Auto bleibt stehen, Hilfe); optional „Zurückfallen“ (nie hinter Start)          |
+| Rennen – Optik     | Draufsicht (von oben); Kind wählt sein Auto                                                               |
+| Belohnung          | Sterne (0–3) + eigene Bestleistung; keine Münzen, Shops, Ranglisten                                       |
+| Aufgabenerstellung | manuell und per Generator; generierte Aufgaben einzeln anpassbar                                          |
+| Einstellungen      | pro Aufgabe, Set, Kind und Zuweisung (siehe Vererbung)                                                    |
 
 ### Vererbung von Einstellungen
 
@@ -136,17 +136,17 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
 
 ### Datenmodell (grob)
 
-| Tabelle | Inhalt |
-|---|---|
-| `teacher` | Konto, Passwort-Hash, optional TOTP-Secret (verschlüsselt) |
-| `student` | `teacher_id`, Vorname, Nachname?, Anzeigename, Benutzername, Passwort-Hash, Einstellungen (JSON), gewähltes Auto |
-| `task` | `teacher_id`, Fach, Format, Inhalt (JSON), Lösung, Distraktoren, Hilfe, Tags, Herkunft (manuell/Generator + Parameter), Einstellungen |
-| `task_set` | Name, Beschreibung, Szenario, Einstellungen |
-| `task_set_item` | Set ↔ Aufgabe, Reihenfolge, Einstellungen |
-| `assignment` | Set ↔ Kind, Zeitraum (von/bis, tagesgenau), Einstellungen, Status |
-| `run` | eine Runde: Start, Ende, Sterne, Kennzahlen |
-| `answer_event` | jede Antwort: Aufgabe, Eingabe, korrekt, Zeit (ms), Versuch, Hilfestufe, Timeout, Fehlermuster |
-| `audit_log` | sicherheitsrelevante Aktionen der Lehrkraft (ohne Inhalte/Personendaten im Klartext) |
+| Tabelle         | Inhalt                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `teacher`       | Konto, Passwort-Hash, optional TOTP-Secret (verschlüsselt)                                                                            |
+| `student`       | `teacher_id`, Vorname, Nachname?, Anzeigename, Benutzername, Passwort-Hash, Einstellungen (JSON), gewähltes Auto                      |
+| `task`          | `teacher_id`, Fach, Format, Inhalt (JSON), Lösung, Distraktoren, Hilfe, Tags, Herkunft (manuell/Generator + Parameter), Einstellungen |
+| `task_set`      | Name, Beschreibung, Szenario, Einstellungen                                                                                           |
+| `task_set_item` | Set ↔ Aufgabe, Reihenfolge, Einstellungen                                                                                             |
+| `assignment`    | Set ↔ Kind, Zeitraum (von/bis, tagesgenau), Einstellungen, Status                                                                     |
+| `run`           | eine Runde: Start, Ende, Sterne, Kennzahlen                                                                                           |
+| `answer_event`  | jede Antwort: Aufgabe, Eingabe, korrekt, Zeit (ms), Versuch, Hilfestufe, Timeout, Fehlermuster                                        |
+| `audit_log`     | sicherheitsrelevante Aktionen der Lehrkraft (ohne Inhalte/Personendaten im Klartext)                                                  |
 
 ### Betrieb
 
@@ -171,6 +171,7 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
 ## 5. Meilensteine
 
 ### M0 – Fundament
+
 - Projektgerüst (SvelteKit, TS, Drizzle, Redis-Client, Lint/Format/Tests)
 - Dockerfile, `docker-compose.dev.yml`, `.env.example`
 - CI (GitHub Actions) und gitleaks pre-commit
@@ -178,6 +179,7 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
 - Backups einrichten und Wiederherstellung testen
 
 ### M1 – Autorennen vollständig
+
 1. **Konten:** Lehrkraft-Setup (erstes Konto per CLI-Befehl), Login, optional 2FA;
    Kinder anlegen/bearbeiten/löschen, Passwort zurücksetzen; Rate-Limit; Rollen
 2. **Aufgabenpool:** Format `arithmetic`; manuell anlegen; Generatoren
@@ -192,6 +194,7 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
    a11y-Tests, Probelauf mit einem Kind
 
 ### Später
+
 - weitere Aufgabenformate (Zahlenstrahl, Punktefeld/Hunderterfeld, Zuordnen, …)
 - weitere Szenarien
 - Offline-Fähigkeit, ggf. PWA
