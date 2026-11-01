@@ -112,7 +112,7 @@
 					<option value="mixed">gemischt</option>
 				</select>
 			</label>
-			<label class="row"><input type="checkbox" name="p.shuffle" /> gemischte Reihenfolge</label>
+			<label class="row"><input type="checkbox" name="p.shuffle" /> Zufällige Reihenfolge</label>
 		</div>
 	{:else if generator === 'divisionRow'}
 		<div class="grid-2">
@@ -151,7 +151,7 @@
 					<option value="mixed">gemischt (auch Teiler)</option>
 				</select>
 			</label>
-			<label class="row"><input type="checkbox" name="p.shuffle" /> gemischte Reihenfolge</label>
+			<label class="row"><input type="checkbox" name="p.shuffle" /> Zufällige Reihenfolge</label>
 		</div>
 	{:else}
 		<div class="grid-2">

@@ -451,4 +451,25 @@ describe('race modes and trophies', () => {
 			ValidationError
 		);
 	});
+
+	it('ghost car: the best finished run of the assignment drives along, in every mode but the time race', async () => {
+		const { s, a } = await fixture({ ghost: true, targetTime: 600 });
+		const T = Date.now();
+		const first = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		expect(first.settings.ghost).toBe(true);
+		expect(first.ghost).toBeNull(); // no earlier run yet
+		let p = first;
+		let n = 0;
+		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 1000 * ++n);
+		expect(p.view.status).toBe('finished');
+
+		for (const mode of ['normal', 'flawless'] as const) {
+			const next = await startOrResumeRun(db, kv, s, a.id, mode, T + 100_000);
+			expect(next.ghost, mode).not.toBeNull();
+			expect(next.ghost!.at(-1)![1]).toBe(1);
+		}
+		const time = await startOrResumeRun(db, kv, s, a.id, 'time', T + 100_000);
+		expect(time.settings.ghost).toBe(false);
+		expect(time.ghost).toBeNull();
+	});
 });

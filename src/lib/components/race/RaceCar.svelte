@@ -155,7 +155,7 @@
 		overflow: visible;
 	}
 	.ghost {
-		opacity: 0.4;
+		opacity: 0.5;
 	}
 	.puff {
 		transform-box: fill-box;

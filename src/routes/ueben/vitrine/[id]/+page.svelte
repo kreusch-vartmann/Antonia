@@ -2,8 +2,7 @@
 	import HintVisual from '#lib/components/race/HintVisual.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
-	import SpeechNotice from '#lib/components/SpeechNotice.svelte';
-	import { speak, speechAvailable } from '#lib/client/speech.ts';
+	import { speak, speechBroken } from '#lib/client/speech.ts';
 	import { TROPHY_LABEL, clock } from '#lib/domain/modes.ts';
 	import { dateTime, mistakes } from '#lib/format.ts';
 	import type { PageProps } from './$types';
@@ -16,8 +15,6 @@
 
 <main class="detail">
 	<p><a class="btn big" href="/ueben/vitrine">← Zur Vitrine</a></p>
-
-	<SpeechNotice />
 
 	<header class="head">
 		<div class="cup"><Trophy kind={t.kind} label /></div>
@@ -57,11 +54,12 @@
 							<div class="hint">
 								<p><strong>Tipp:</strong> {task.hint.text}</p>
 								{#if task.hint.visual}<HintVisual visual={task.hint.visual} />{/if}
-								{#if speechAvailable()}
-									<button class="btn small" onclick={() => speak(task.hint?.text ?? '')}
-										><Icon name="speaker" /> Tipp vorlesen</button
-									>
-								{/if}
+								<button
+									class="btn small"
+									disabled={$speechBroken}
+									onclick={() => speak(task.hint?.text ?? '')}
+									><Icon name="speaker" /> Tipp vorlesen</button
+								>
 							</div>
 						{/if}
 					{/if}

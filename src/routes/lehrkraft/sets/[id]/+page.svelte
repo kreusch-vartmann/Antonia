@@ -53,7 +53,9 @@
 		<h2>Aufgaben ({data.items.length})</h2>
 		<div class="row">
 			<form method="POST" action="?/shuffle" use:enhance>
-				<button class="btn small" disabled={data.items.length < 2}>Reihenfolge mischen</button>
+				<button class="btn small" disabled={data.items.length < 2}
+					>Reihenfolge per Zufall ändern</button
+				>
 			</form>
 			<a class="btn btn-primary small" href="/lehrkraft/sets/{data.set.id}/aufgaben"
 				>Aufgaben hinzufügen</a

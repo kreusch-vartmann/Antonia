@@ -66,4 +66,17 @@ describe('settings inheritance', () => {
 		f.set('s.hintAfter', '');
 		expect(layerFromForm(f)).toEqual({ answerFormat: 'choice', choiceCount: 4, sound: false });
 	});
+
+	it('stores only deviations from the value that applies anyway', () => {
+		const f = new FormData();
+		f.set('s.ghost', 'false');
+		f.set('s.~ghost', 'false');
+		f.set('s.order', 'shuffle');
+		f.set('s.~order', 'fixed');
+		f.set('s.hintAfter', '2');
+		f.set('s.~hintAfter', '1');
+		f.set('s.solutionAfter', '2');
+		f.set('s.~solutionAfter', '2');
+		expect(layerFromForm(f)).toEqual({ order: 'shuffle', hintAfter: 2 });
+	});
 });

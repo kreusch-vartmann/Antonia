@@ -7,7 +7,6 @@
 	import HintVisual from './HintVisual.svelte';
 	import Icon from '../Icon.svelte';
 	import Trophy from '../Trophy.svelte';
-	import SpeechNotice from '../SpeechNotice.svelte';
 	import {
 		CLOCK_OPPONENT,
 		FAILED_TEXT,
@@ -17,7 +16,7 @@
 		TROPHY_WON,
 		clock
 	} from '#lib/domain/modes.ts';
-	import { speak, speechAvailable, stopSpeaking } from '#lib/client/speech.ts';
+	import { speak, speechBroken, stopSpeaking } from '#lib/client/speech.ts';
 	import { sounds } from '#lib/client/sound.ts';
 	import type { RunPayload } from '#lib/server/services/runs.ts';
 	import type { Feedback } from '#lib/domain/run/engine.ts';
@@ -361,6 +360,9 @@
 					<span><RaceCar model={car.model} color={car.color} size={34} ghost /> deine Bestzeit</span
 					>
 				{/if}
+				{#if settings.ghost && !payload.ghost}
+					<span class="muted">Dein Geister-Auto fährt ab der nächsten Fahrt mit.</span>
+				{/if}
 				{#if mode === 'time'}
 					<span
 						><RaceCar model="monster" color="monster" size={34} />
@@ -371,7 +373,6 @@
 		</div>
 
 		<section class="panel">
-			<SpeechNotice />
 			{#if confirmExit}
 				<div class="center stack">
 					<p class="big-text">Möchtest du aufhören?</p>
@@ -439,8 +440,8 @@
 							{/if}
 						{/if}
 					{/if}
-					{#if view.status !== 'aborted' && settings.readAloud !== 'off' && speechAvailable()}
-						<button class="btn small" onclick={() => speak(endText())}
+					{#if view.status !== 'aborted' && settings.readAloud !== 'off'}
+						<button class="btn small" disabled={$speechBroken} onclick={() => speak(endText())}
 							><Icon name="speaker" /> Vorlesen</button
 						>
 					{/if}
@@ -467,9 +468,10 @@
 							{/if}
 						{/each}
 					</p>
-					{#if settings.readAloud !== 'off' && speechAvailable()}
+					{#if settings.readAloud !== 'off'}
 						<button
 							class="btn small speak"
+							disabled={$speechBroken}
 							onclick={() => speak(cur.presentation.speech)}
 							aria-label="Aufgabe vorlesen"><Icon name="speaker" /> Vorlesen</button
 						>
@@ -506,8 +508,11 @@
 					<div class="hint">
 						<p><strong>Tipp:</strong> {cur.hint.text}</p>
 						{#if cur.hint.visual}<HintVisual visual={cur.hint.visual} />{/if}
-						{#if settings.readAloud !== 'off' && speechAvailable()}
-							<button class="btn small" onclick={() => speak(cur.hint?.text ?? '')}
+						{#if settings.readAloud !== 'off'}
+							<button
+								class="btn small"
+								disabled={$speechBroken}
+								onclick={() => speak(cur.hint?.text ?? '')}
 								><Icon name="speaker" /> Tipp vorlesen</button
 							>
 						{/if}

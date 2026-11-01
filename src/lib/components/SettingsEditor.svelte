@@ -3,7 +3,6 @@
 		DEFAULT_SETTINGS,
 		LAYER_FROM,
 		SETTING_META,
-		formatSettingValue,
 		keysForLevel,
 		type LayerName,
 		type SettingKey,
@@ -50,11 +49,10 @@
 
 	const setCount = $derived(keys.filter((k) => layer[k] !== undefined).length);
 
-	/** The value that applies when nothing is chosen here, and where it comes from. */
-	function defaultLabel(k: SettingKey) {
-		const src = inheritedSources?.[k] ?? 'default';
-		const from = src === 'default' ? '' : ` (${LAYER_FROM[src]})`;
-		return `Voreinstellung: ${formatSettingValue(k, inherited[k])}${from}`;
+	/** Where an inherited value comes from, if not from the standard values. */
+	function source(k: SettingKey) {
+		const src = inheritedSources?.[k];
+		return layer[k] === undefined && src && src !== 'default' ? LAYER_FROM[src] : null;
 	}
 </script>
 
@@ -62,12 +60,11 @@
 	<summary>
 		<strong>{title}</strong>
 		<span class="muted small">
-			{setCount === 0 ? 'alles wie voreingestellt' : `${setCount} abweichend festgelegt`}
+			{setCount === 0 ? 'alles wie Standard' : `${setCount} abweichend festgelegt`}
 		</span>
 	</summary>
 	<p class="muted small">
-		Ohne eigene Angabe gilt die Voreinstellung. Mit „Voreinstellung“ bzw. einem leeren Feld wird
-		eine eigene Angabe wieder zurückgenommen.
+		Hier stehen die Werte, die gelten. Gespeichert werden nur Abweichungen vom Standard.
 	</p>
 	<div class="groups">
 		{#each groups as [group, ks] (group)}
@@ -75,6 +72,7 @@
 				<legend>{group}</legend>
 				{#each ks as k (k)}
 					{@const meta = SETTING_META[k]}
+					{@const current = layer[k] ?? inherited[k]}
 					<label class="field">
 						<span>{meta.label}</span>
 						{#if meta.type === 'number'}
@@ -83,23 +81,23 @@
 								name={prefix + k}
 								min={meta.min}
 								max={meta.max}
-								value={layer[k] ?? ''}
-								placeholder={defaultLabel(k)}
+								value={current}
 							/>
 						{:else}
 							<select name={prefix + k}>
-								<option value="" selected={layer[k] === undefined}>{defaultLabel(k)}</option>
 								{#if meta.type === 'boolean'}
-									<option value="true" selected={layer[k] === true}>ja</option>
-									<option value="false" selected={layer[k] === false}>nein</option>
+									<option value="true" selected={current === true}>Ja</option>
+									<option value="false" selected={current === false}>Nein</option>
 								{:else}
 									{#each meta.options ?? [] as o (o.value)}
-										<option value={o.value} selected={layer[k] === o.value}>{o.label}</option>
+										<option value={o.value} selected={current === o.value}>{o.label}</option>
 									{/each}
 								{/if}
 							</select>
 						{/if}
+						<input type="hidden" name="{prefix}~{k}" value={String(inherited[k])} />
 						{#if meta.help}<small>{meta.help}</small>{/if}
+						{#if source(k)}<small class="source">Gilt so {source(k)}.</small>{/if}
 					</label>
 				{/each}
 			</fieldset>
@@ -121,6 +119,10 @@
 		align-items: baseline;
 		min-height: 2.5rem;
 		align-items: center;
+	}
+	.source {
+		color: var(--color-muted);
+		font-style: italic;
 	}
 	.groups {
 		display: grid;

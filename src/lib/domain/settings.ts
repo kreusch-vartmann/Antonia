@@ -152,13 +152,16 @@ export function sanitizeLayer(layer: unknown): SettingsLayer {
 
 /**
  * Parse a settings layer from form data. Each setting uses the field name
- * `s.<key>`; the value "" (or a missing field) means "inherit".
+ * `s.<key>`; the value "" (or a missing field) means "inherit". A value that
+ * equals the value that applies anyway (field `s.~<key>`) is not stored.
  */
 export function layerFromForm(form: FormData, prefix = 's.'): SettingsLayer {
 	const out: Record<string, unknown> = {};
 	for (const key of Object.keys(DEFAULT_SETTINGS) as SettingKey[]) {
 		const raw = form.get(prefix + key);
 		if (raw === null || raw === '') continue;
+		// The editor pre-selects the value that applies anyway (`~` field). Only deviations are stored.
+		if (form.get(`${prefix}~${key}`) === raw) continue;
 		const def = DEFAULT_SETTINGS[key];
 		let value: unknown = raw;
 		if (typeof def === 'number') value = Number(raw);
@@ -217,8 +220,8 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		group: 'Antworten',
 		levels: ['set', 'assignment'],
 		options: [
-			{ value: 'fixed', label: 'wie im Set' },
-			{ value: 'shuffle', label: 'gemischt' }
+			{ value: 'fixed', label: 'Wie im Set' },
+			{ value: 'shuffle', label: 'Zufall' }
 		]
 	},
 	hintAfter: {
@@ -283,7 +286,7 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	},
 	ghost: {
 		label: 'Geister-Auto (die eigene Bestzeit fährt mit)',
-		help: 'Nicht beim Rennen „Gegen die Zeit“.',
+		help: 'Fährt ab der zweiten erfolgreichen Fahrt mit diesem Set mit (schnellste bisherige Fahrt, jede Rennart außer „Gegen die Zeit“).',
 		type: 'boolean',
 		group: 'Rennen',
 		levels: ['student', 'assignment']
@@ -294,9 +297,9 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		group: 'Darstellung',
 		levels: ['student'],
 		options: [
-			{ value: 'off', label: 'aus' },
-			{ value: 'button', label: 'per Knopf' },
-			{ value: 'auto', label: 'automatisch' }
+			{ value: 'off', label: 'Aus' },
+			{ value: 'button', label: 'Per Knopf' },
+			{ value: 'auto', label: 'Automatisch' }
 		]
 	},
 	sound: { label: 'Töne', type: 'boolean', group: 'Darstellung', levels: ['student'] },
@@ -317,7 +320,7 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 
 export function formatSettingValue(key: SettingKey, value: unknown): string {
 	const meta = SETTING_META[key];
-	if (meta.type === 'boolean') return value ? 'ja' : 'nein';
+	if (meta.type === 'boolean') return value ? 'Ja' : 'Nein';
 	if (meta.type === 'enum')
 		return meta.options?.find((o) => o.value === value)?.label ?? String(value);
 	if (meta.unit && value === 0) return 'aus';
