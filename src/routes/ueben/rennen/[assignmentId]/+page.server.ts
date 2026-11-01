@@ -15,7 +15,8 @@ export const load: PageServerLoad = async (event) => {
 	const a = active.find((x) => x.id === id);
 	if (!a) error(404, 'Dieses Rennen ist gerade nicht verfügbar.');
 	try {
-		const mode = parseRunMode(event.url.searchParams.get('mode'));
+		const requested = event.url.searchParams.get('mode');
+		const mode = requested ? parseRunMode(requested) : (a.modes[0] ?? 'normal');
 		const payload = await startOrResumeRun(db(), kv(), studentId, id, mode);
 		return { payload, setName: a.setName, assignmentId: id };
 	} catch (e) {

@@ -88,6 +88,24 @@ describe('arithmetic format', () => {
 		expect(arithmetic.hint(mul(7, 6))?.text).toContain('5 · 6 + 2 · 6');
 	});
 
+	it('tile hint follows the number range: 10 tiles up to 10, 20 tiles up to 20', () => {
+		const add = (a: number, b: number): ArithmeticContent => ({
+			format: 'arithmetic',
+			expr: { a, op: '+', b, gap: 'result' },
+			answer: a + b
+		});
+		const sub = (a: number, b: number): ArithmeticContent => ({
+			format: 'arithmetic',
+			expr: { a, op: '-', b, gap: 'result' },
+			answer: a - b
+		});
+		expect(arithmetic.hint(add(3, 4))?.visual).toMatchObject({ kind: 'twenty', size: 10 });
+		expect(arithmetic.hint(sub(9, 4))?.visual).toMatchObject({ kind: 'twenty', size: 10 });
+		expect(arithmetic.hint(add(7, 8))?.visual).toMatchObject({ kind: 'twenty', size: 20 });
+		expect(arithmetic.hint(sub(15, 6))?.visual).toMatchObject({ kind: 'twenty', size: 20 });
+		expect(arithmetic.hint(add(30, 8))?.visual).toBeUndefined();
+	});
+
 	it('custom hint overrides the text', () => {
 		expect(arithmetic.hint({ ...mul(3, 5), hint: 'Denk an deine Hände!' })?.text).toBe(
 			'Denk an deine Hände!'

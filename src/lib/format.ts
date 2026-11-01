@@ -54,3 +54,7 @@ export const RUN_STATUS: Record<string, string> = {
 	aborted: 'abgebrochen',
 	failed: 'Motorschaden'
 };
+
+export function mistakes(n: number): string {
+	return n === 0 ? 'ohne Fehler' : n === 1 ? '1 Fehler' : `${n} Fehler`;
+}

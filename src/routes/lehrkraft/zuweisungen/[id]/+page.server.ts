@@ -6,8 +6,9 @@ import {
 	getAssignmentForTeacher,
 	updateAssignment
 } from '#lib/server/services/sets.ts';
-import { guarded, isUuid, str } from '#lib/server/forms.ts';
+import { guarded, isUuid, str, strs } from '#lib/server/forms.ts';
 import { layerFromForm, resolveSettings } from '#lib/domain/settings.ts';
+import { cleanModes } from '#lib/domain/modes.ts';
 
 export const load: PageServerLoad = async (event) => {
 	const teacherId = requireTeacher(event);
@@ -32,7 +33,8 @@ export const actions: Actions = {
 				startsOn: str(form, 'startsOn') || null,
 				endsOn: str(form, 'endsOn') || null,
 				archived: form.get('archived') === 'on',
-				settings: layerFromForm(form)
+				settings: layerFromForm(form),
+				modes: cleanModes(strs(form, 'mode'))
 			});
 			return { saved: true };
 		});

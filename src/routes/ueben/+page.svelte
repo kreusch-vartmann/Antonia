@@ -1,7 +1,7 @@
 <script lang="ts">
 	import RaceCar from '#lib/components/race/RaceCar.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
-	import { MODE_HELP, MODE_LABEL, RUN_MODES, TROPHY_FOR_MODE, clock } from '#lib/domain/modes.ts';
+	import { MODE_HELP, MODE_LABEL, TROPHY_FOR_MODE, clock } from '#lib/domain/modes.ts';
 	import { date } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
@@ -31,7 +31,7 @@
 		<h2>Deine Rennen</h2>
 		<ul class="cards">
 			{#each data.assignments as a (a.id)}
-				{@const modes = RUN_MODES.filter((m) => m !== 'time' || a.targetTime > 0)}
+				{@const modes = a.modes}
 				<li class="race-card">
 					<span class="title">{a.setName}</span>
 					{#if a.description}<span class="desc">{a.description}</span>{/if}
@@ -42,6 +42,9 @@
 					<span class="stars" aria-label="Beste Fahrt: {a.bestStars ?? 0} Sterne">
 						{#each [1, 2, 3] as n (n)}<span class:on={n <= (a.bestStars ?? 0)}>★</span>{/each}
 					</span>
+					{#if modes.length === 0}
+						<p class="muted">Dieses Rennen ist gerade nicht freigegeben.</p>
+					{/if}
 					<div class="modes">
 						{#each modes as m (m)}
 							<a

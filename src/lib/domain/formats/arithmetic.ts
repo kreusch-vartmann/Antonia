@@ -165,8 +165,11 @@ function multiplicationHint(a: number, b: number): Hint {
 }
 
 function additionHint(a: number, op: '+' | '-', b: number, r: number): Hint {
-	const within20 = Math.max(a, b, r) <= 20;
-	const visual = within20 ? { kind: 'twenty' as const, a, b, op } : undefined;
+	const max = Math.max(a, b, r);
+	const within20 = max <= 20;
+	const visual = within20
+		? { kind: 'twenty' as const, size: max <= 10 ? (10 as const) : (20 as const), a, b, op }
+		: undefined;
 	if (op === '+') {
 		if (within20 && a < 10 && r > 10) {
 			return {

@@ -131,8 +131,10 @@ export async function startOrResumeRun(
 	now = Date.now()
 ): Promise<RunPayload> {
 	const active = await activeAssignmentsForChild(db, studentId);
-	if (!active.some((a) => a.id === assignmentId))
-		throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
+	const available = active.find((a) => a.id === assignmentId);
+	if (!available) throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
+	if (!available.modes.includes(mode))
+		throw new ValidationError('Diese Rennart ist für dich gerade nicht freigegeben.');
 
 	const existingId = await kv.get(activeKey(assignmentId, mode));
 	if (existingId) {
@@ -224,6 +226,16 @@ async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) 
 
 async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 	const mode = s.engine.mode ?? 'normal';
+	const [wrong] = await db
+		.select({ n: sql<number>`count(*)::int` })
+		.from(answerEvent)
+		.where(
+			and(
+				eq(answerEvent.runId, s.runId),
+				eq(answerEvent.kind, 'answer'),
+				eq(answerEvent.correct, false)
+			)
+		);
 	const [set] = await db
 		.select({ name: taskSet.name })
 		.from(taskSet)
@@ -237,6 +249,7 @@ async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 			mode,
 			setName: set?.name ?? '',
 			durationMs,
+			mistakes: wrong?.n ?? 0,
 			targetMs: mode === 'time' ? s.engine.settings.targetTime * 1000 : null,
 			earnedAt: new Date(s.engine.finishedAt ?? Date.now())
 		})

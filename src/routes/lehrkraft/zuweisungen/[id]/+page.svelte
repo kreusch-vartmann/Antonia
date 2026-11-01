@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
+	import ModePicker from '#lib/components/ModePicker.svelte';
 	import {
 		DEFAULT_SETTINGS,
 		LAYER_LABELS,
@@ -45,6 +46,7 @@
 		><input type="checkbox" name="archived" checked={a.assignment.archived} /> beendet (für das Kind ausblenden)</label
 	>
 	{#key a.assignment.updatedAt}
+		<ModePicker selected={a.assignment.modes} />
 		<SettingsEditor
 			layer={a.assignment.settings}
 			inherited={data.below.values}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Trophy from '#lib/components/Trophy.svelte';
 	import { clock } from '#lib/domain/modes.ts';
+	import { dateTime, mistakes } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -20,11 +21,16 @@
 		<ul class="shelf">
 			{#each data.trophies as t (t.id)}
 				<li class="trophy">
-					<div class="cup"><Trophy kind={t.kind} label /></div>
-					<span class="set">{t.setName}</span>
-					{#if t.mode === 'time' && t.durationMs !== null}
-						<span class="time">Zeit: {clock(t.durationMs)}</span>
-					{/if}
+					<a class="item" href="/ueben/vitrine/{t.id}" aria-describedby="tip-{t.id}">
+						<div class="cup"><Trophy kind={t.kind} label /></div>
+						<span class="set">{t.setName}</span>
+						{#if t.mode === 'time' && t.durationMs !== null}
+							<span class="time">Zeit: {clock(t.durationMs)}</span>
+						{/if}
+						<span role="tooltip" id="tip-{t.id}" class="tip">
+							Erworben am {dateTime(t.earnedAt)} Uhr<br />{mistakes(t.mistakes)}
+						</span>
+					</a>
 				</li>
 			{/each}
 		</ul>
@@ -54,13 +60,43 @@
 		border-radius: 1rem;
 	}
 	.trophy {
+		border-bottom: 6px solid #b89868;
+	}
+	.item {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: var(--space-1);
 		text-align: center;
-		padding-bottom: var(--space-2);
-		border-bottom: 6px solid #b89868;
+		padding: var(--space-2);
+		border-radius: 0.8rem;
+		color: inherit;
+		text-decoration: none;
+	}
+	.item:hover,
+	.item:focus-visible {
+		background: #fff8e0;
+	}
+	.tip {
+		visibility: hidden;
+		position: absolute;
+		bottom: calc(100% - 0.5rem);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 2;
+		width: max-content;
+		max-width: 14rem;
+		padding: var(--space-2) var(--space-3);
+		border-radius: 0.6rem;
+		background: #2b2f36;
+		color: #fff;
+		font-size: 0.9rem;
+		pointer-events: none;
+	}
+	.item:hover .tip,
+	.item:focus-visible .tip {
+		visibility: visible;
 	}
 	.cup {
 		width: 6rem;

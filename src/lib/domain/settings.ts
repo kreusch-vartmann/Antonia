@@ -259,7 +259,7 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	},
 	runTimeLimit: {
 		label: 'Zeit für das ganze Rennen',
-		help: '0 = aus',
+		help: 'Danach endet das Rennen. Nicht zu verwechseln mit der Zielzeit des Zeitrennens. 0 = aus',
 		type: 'number',
 		min: 0,
 		max: 7200,
@@ -267,13 +267,13 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		group: 'Zeit'
 	},
 	targetTime: {
-		label: 'Zielzeit für das Zeitrennen',
-		help: 'Das Zeit-Auto erreicht das Ziel genau nach dieser Zeit. 0 = Zeitrennen wird nicht angeboten.',
+		label: 'Zielzeit für das Zeitrennen (Zeitmonstertruck)',
+		help: 'Die Rennart (Normal, Fehlerfrei, Gegen die Zeit) wählt das Kind selbst. „Gegen die Zeit“ wird nur angeboten, wenn hier eine Zielzeit steht; der Zeitmonstertruck erreicht das Ziel genau dann. 0 = nicht angeboten.',
 		type: 'number',
 		min: 0,
 		max: 7200,
 		unit: 's',
-		group: 'Zeit'
+		group: 'Rennen'
 	},
 	showTimer: { label: 'Zeitanzeige (Tank) sichtbar', type: 'boolean', group: 'Zeit' },
 	opponent: {

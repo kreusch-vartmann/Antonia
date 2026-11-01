@@ -8,6 +8,11 @@
 export const RUN_MODES = ['normal', 'flawless', 'time'] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
+/** Normalised list of modes in canonical order; unknown values are dropped. */
+export function cleanModes(values: unknown[]): RunMode[] {
+	return RUN_MODES.filter((m) => values.includes(m));
+}
+
 export type TrophyKind = 'bronze' | 'silver' | 'gold';
 
 export const TROPHY_FOR_MODE: Record<RunMode, TrophyKind> = {

@@ -22,10 +22,11 @@ import {
 	activeAssignmentsForChild,
 	listAssignmentsForSet,
 	listAssignmentsForStudent,
-	listSets
+	listSets,
+	updateAssignment
 } from '#lib/server/services/sets.ts';
 import { act, startOrResumeRun, type RunPayload } from '#lib/server/services/runs.ts';
-import { listTrophies } from '#lib/server/services/trophies.ts';
+import { listTrophies, trophyDetail } from '#lib/server/services/trophies.ts';
 import type { RunMode } from '#lib/domain/modes.ts';
 import { exportCsv, overview, studentReport } from '#lib/server/services/analytics.ts';
 import { generateMultiplicationRow } from '#lib/domain/generators.ts';
@@ -365,5 +366,84 @@ describe('race modes and trophies', () => {
 		await drive(s, a.id, 'normal', Date.now());
 		await deleteStudent(db, t, s);
 		expect(await listTrophies(db, s)).toHaveLength(0);
+	});
+
+	it('stores the number of mistakes and shows the whole race with tips for wrong answers', async () => {
+		const { t, s, a } = await fixture();
+		const T = Date.now();
+		let p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		p = await answerCurrent(s, p, T + 1000, true); // wrong
+		p = await answerCurrent(s, p, T + 2000, true); // wrong again (solution shown)
+		let n = 2;
+		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 2000 + 1000 * ++n);
+		const [row] = await listTrophies(db, s);
+		expect(row.mistakes).toBe(2);
+
+		const detail = await trophyDetail(db, s, row.id);
+		expect(detail?.trophy).toMatchObject({ kind: 'bronze', setName: '5er-Reihe', mistakes: 2 });
+		expect(detail?.tasks.map((x) => x.text)).toEqual(['1 · 5 = 5', '2 · 5 = 10']);
+		expect(detail?.tasks[0].wrong).toEqual(['999', '999']);
+		expect(detail?.tasks[0].hint?.text).toBeTruthy();
+		expect(detail?.tasks[1].wrong).toEqual([]);
+		expect(detail?.tasks[1].hint).toBeNull();
+
+		// another child cannot open the trophy
+		const other = await createStudent(db, t, {
+			firstName: 'Tom',
+			username: 'tom',
+			password: 'abcd'
+		});
+		expect(await trophyDetail(db, other, row.id)).toBeNull();
+	});
+
+	it('the teacher decides which race modes the child may use', async () => {
+		const { t, s, a } = await fixture({ targetTime: 600 });
+		expect(a.modes).toEqual(['normal', 'flawless', 'time']);
+
+		await updateAssignment(db, t, a.id, { modes: ['flawless'] });
+		const [only] = await activeAssignmentsForChild(db, s);
+		expect(only.modes).toEqual(['flawless']);
+		await expect(startOrResumeRun(db, kv, s, a.id, 'normal')).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		await expect(startOrResumeRun(db, kv, s, a.id, 'time')).rejects.toBeInstanceOf(ValidationError);
+		expect((await startOrResumeRun(db, kv, s, a.id, 'flawless')).view.mode).toBe('flawless');
+
+		await expect(updateAssignment(db, t, a.id, { modes: [] })).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		const list = await listAssignmentsForStudent(db, t, s);
+		expect(list[0].modes).toEqual(['flawless']);
+	});
+
+	it('the time race needs the teacher to allow it and to set a target time', async () => {
+		const { t, s, a } = await fixture(); // no target time
+		expect((await activeAssignmentsForChild(db, s))[0].modes).toEqual(['normal', 'flawless']);
+		await updateAssignment(db, t, a.id, { modes: ['time'] });
+		expect((await activeAssignmentsForChild(db, s))[0].modes).toEqual([]);
+	});
+
+	it('new assignments can be restricted to certain modes right away', async () => {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const ids = await createTasks(
+			db,
+			t,
+			generateMultiplicationRow({ row: 5, from: 1, to: 2 }).map((d) => ({
+				content: d.content,
+				tags: d.tags,
+				origin: d.origin
+			}))
+		);
+		const setId = await createSet(db, t, { name: 'Set', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s], modes: ['normal'] });
+		expect((await activeAssignmentsForChild(db, s))[0].modes).toEqual(['normal']);
+		await expect(assign(db, t, { setId, studentIds: [s], modes: [] })).rejects.toBeInstanceOf(
+			ValidationError
+		);
 	});
 });

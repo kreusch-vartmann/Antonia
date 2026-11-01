@@ -143,6 +143,12 @@ export const assignment = pgTable(
 		startsOn: date('starts_on'),
 		endsOn: date('ends_on'),
 		settings: jsonb('settings').$type<SettingsLayer>().notNull().default({}),
+		/** Race modes the child may use with this assignment. */
+		modes: text('modes')
+			.array()
+			.$type<RunMode[]>()
+			.notNull()
+			.default(['normal', 'flawless', 'time']),
 		archived: boolean('archived').notNull().default(false),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
@@ -202,6 +208,8 @@ export const trophy = pgTable(
 		setName: text('set_name').notNull(),
 		durationMs: integer('duration_ms'),
 		targetMs: integer('target_ms'),
+		/** Wrong answers during the race. */
+		mistakes: integer('mistakes').notNull().default(0),
 		earnedAt: timestamp('earned_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => [

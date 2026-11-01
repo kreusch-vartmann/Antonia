@@ -13,6 +13,7 @@ import {
 import { listStudents } from '#lib/server/services/students.ts';
 import { guarded, isUuid, str, strs } from '#lib/server/forms.ts';
 import { layerFromForm } from '#lib/domain/settings.ts';
+import { cleanModes } from '#lib/domain/modes.ts';
 import { formatOf } from '#lib/domain/formats/index.ts';
 
 export const load: PageServerLoad = async (event) => {
@@ -103,7 +104,8 @@ export const actions: Actions = {
 				studentIds: strs(form, 'studentId').filter(isUuid),
 				startsOn: str(form, 'startsOn') || null,
 				endsOn: str(form, 'endsOn') || null,
-				settings: layerFromForm(form)
+				settings: layerFromForm(form),
+				modes: cleanModes(strs(form, 'mode'))
 			});
 			return { saved: 'assign' };
 		});

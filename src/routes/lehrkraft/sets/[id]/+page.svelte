@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
+	import ModePicker from '#lib/components/ModePicker.svelte';
+	import { MODE_LABEL } from '#lib/domain/modes.ts';
 	import { TASK_LEVEL_KEYS, resolveSettings } from '#lib/domain/settings.ts';
 	import { date, fullName, stars } from '#lib/format.ts';
 	import type { PageProps } from './$types';
@@ -119,7 +121,10 @@
 		<div class="table-wrap">
 			<table>
 				<thead
-					><tr><th>Kind</th><th>Zeitraum</th><th class="num">Rennen</th><th>Beste</th><th></th></tr
+					><tr
+						><th>Kind</th><th>Zeitraum</th><th>Rennarten</th><th class="num">Rennen</th><th
+							>Beste</th
+						><th></th></tr
 					></thead
 				>
 				<tbody>
@@ -131,6 +136,7 @@
 									? date(a.endsOn)
 									: 'offen'}</td
 							>
+							<td>{a.modes.map((m) => MODE_LABEL[m]).join(', ')}</td>
 							<td class="num">{a.runs}</td>
 							<td>{stars(a.bestStars)}</td>
 							<td><a class="btn small" href="/lehrkraft/zuweisungen/{a.id}">Bearbeiten</a></td>
@@ -157,6 +163,7 @@
 				<label class="field"><span>Ab (optional)</span><input type="date" name="startsOn" /></label>
 				<label class="field"><span>Bis (optional)</span><input type="date" name="endsOn" /></label>
 			</div>
+			<ModePicker />
 			<SettingsEditor layer={{}} title="Besondere Einstellungen für diese Zuweisung (optional)" />
 			{#if form?.saved === 'assign'}<p class="success" role="status">Zugewiesen.</p>{/if}
 			<div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import StudentFields from '#lib/components/StudentFields.svelte';
+	import { MODE_LABEL } from '#lib/domain/modes.ts';
 	import { date, fullName, stars } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
@@ -51,7 +52,9 @@
 		<div class="table-wrap">
 			<table>
 				<thead
-					><tr><th>Set</th><th>Zeitraum</th><th class="num">Rennen</th><th>Beste</th><th></th></tr
+					><tr
+						><th>Set</th><th>Zeitraum</th><th>Rennarten</th><th class="num">Rennen</th><th>Beste</th
+						><th></th></tr
 					></thead
 				>
 				<tbody>
@@ -67,6 +70,7 @@
 									? date(a.endsOn)
 									: 'offen'}</td
 							>
+							<td>{a.modes.map((m) => MODE_LABEL[m]).join(', ')}</td>
 							<td class="num">{a.runs}</td>
 							<td>{stars(a.bestStars)}</td>
 							<td><a class="btn small" href="/lehrkraft/zuweisungen/{a.id}">Einstellungen</a></td>

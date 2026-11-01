@@ -31,7 +31,8 @@ export type TaskOrigin =
 
 export type HintVisual =
 	| { kind: 'dots'; rows: number; cols: number }
-	| { kind: 'twenty'; a: number; b: number; op: '+' | '-' };
+	/** Tile field with 10 or 20 tiles, depending on the number range of the task. */
+	| { kind: 'twenty'; size: 10 | 20; a: number; b: number; op: '+' | '-' };
 
 export interface Hint {
 	text: string;

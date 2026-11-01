@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { resolveSettings, sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
+import { RUN_MODES, cleanModes, type RunMode } from '#lib/domain/modes.ts';
 import { ValidationError } from './accounts';
 
 const { taskSet, taskSetItem, task, assignment, student } = schema;
@@ -173,6 +174,12 @@ export async function removeSet(db: Db, teacherId: string, id: string) {
 
 // ---------- Assignments ----------
 
+function requireModes(values: string[]): RunMode[] {
+	const modes = cleanModes(values);
+	if (modes.length === 0) throw new ValidationError('Bitte mindestens eine Rennart auswählen.');
+	return modes;
+}
+
 const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 
 function cleanDate(d: string | null | undefined): string | null {
@@ -195,8 +202,11 @@ export async function assign(
 		startsOn?: string | null;
 		endsOn?: string | null;
 		settings?: SettingsLayer;
+		/** Allowed race modes (default: all). */
+		modes?: RunMode[];
 	}
 ) {
+	const modes = input.modes === undefined ? [...RUN_MODES] : requireModes(input.modes);
 	const set = await getSet(db, teacherId, input.setId);
 	if (!set) throw new ValidationError('Set nicht gefunden.');
 	const startsOn = cleanDate(input.startsOn);
@@ -216,6 +226,7 @@ export async function assign(
 			studentId,
 			startsOn,
 			endsOn,
+			modes,
 			settings: sanitizeLayer(input.settings ?? {})
 		}))
 	);
@@ -251,8 +262,10 @@ export async function updateAssignment(
 		endsOn?: string | null;
 		settings?: SettingsLayer;
 		archived?: boolean;
+		modes?: RunMode[];
 	}
 ) {
+	const modes = input.modes === undefined ? undefined : requireModes(input.modes);
 	const a = await getAssignmentForTeacher(db, teacherId, id);
 	if (!a) throw new ValidationError('Zuweisung nicht gefunden.');
 	const startsOn = cleanDate(input.startsOn);
@@ -265,6 +278,7 @@ export async function updateAssignment(
 			startsOn,
 			endsOn,
 			settings: sanitizeLayer(input.settings ?? {}),
+			modes: modes ?? a.assignment.modes,
 			archived: input.archived ?? a.assignment.archived,
 			updatedAt: new Date()
 		})
@@ -289,6 +303,7 @@ export async function listAssignmentsForSet(db: Db, teacherId: string, setId: st
 			endsOn: assignment.endsOn,
 			archived: assignment.archived,
 			settings: assignment.settings,
+			modes: assignment.modes,
 			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status <> 'running')`,
 			bestStars: sql<
 				number | null
@@ -310,6 +325,7 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 			startsOn: assignment.startsOn,
 			endsOn: assignment.endsOn,
 			archived: assignment.archived,
+			modes: assignment.modes,
 			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status <> 'running')`,
 			bestStars: sql<
 				number | null
@@ -326,6 +342,7 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 	const rows = await db
 		.select({
 			id: assignment.id,
+			allowedModes: assignment.modes,
 			setSettings: taskSet.settings,
 			assignmentSettings: assignment.settings,
 			studentSettings: student.settings,
@@ -351,13 +368,18 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			)
 		)
 		.orderBy(asc(assignment.endsOn), desc(assignment.createdAt));
-	return rows.map(({ setSettings, assignmentSettings, studentSettings, ...a }) => ({
-		...a,
-		/** Target time in seconds for the race against the clock (0 = not offered). */
-		targetTime: resolveSettings({
+	return rows.map(({ setSettings, assignmentSettings, studentSettings, allowedModes, ...a }) => {
+		const targetTime = resolveSettings({
 			set: setSettings,
 			student: studentSettings,
 			assignment: assignmentSettings
-		}).values.targetTime
-	}));
+		}).values.targetTime;
+		return {
+			...a,
+			/** Target time in seconds for the race against the clock (0 = not offered). */
+			targetTime,
+			/** Modes the child may choose: allowed by the teacher, and the time race needs a target. */
+			modes: cleanModes(allowedModes).filter((m) => m !== 'time' || targetTime > 0)
+		};
+	});
 }

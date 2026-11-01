@@ -132,6 +132,20 @@ test('child races and finishes', async ({ page }) => {
 	await expect(page.getByRole('img', { name: 'Bronzener Pokal' })).toBeVisible();
 	await expect(page.getByText('Einmaleins 5er-Reihe')).toBeVisible();
 	await a11y(page);
+
+	// hovering shows when the trophy was earned and the number of mistakes
+	await page.getByRole('img', { name: 'Bronzener Pokal' }).hover();
+	await expect(page.getByRole('tooltip')).toContainText('Erworben am');
+	await expect(page.getByRole('tooltip')).toContainText('1 Fehler');
+
+	// clicking shows the whole race with a tip for the task that went wrong
+	await page.getByRole('img', { name: 'Bronzener Pokal' }).click();
+	await expect(page.getByRole('heading', { name: 'Einmaleins 5er-Reihe' })).toBeVisible();
+	await expect(page.getByText('1 · 5 = 5', { exact: true })).toBeVisible();
+	await expect(page.getByText('2 · 5 = 10', { exact: true })).toBeVisible();
+	await expect(page.getByText('Deine falschen Antworten: 9')).toBeVisible();
+	await expect(page.getByText('Tipp:')).toBeVisible();
+	await a11y(page);
 });
 
 test('teacher sees the evaluation', async ({ page }) => {
