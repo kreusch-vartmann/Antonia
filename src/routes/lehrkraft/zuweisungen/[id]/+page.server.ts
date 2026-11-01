@@ -4,6 +4,7 @@ import { db, requireTeacher } from '#lib/server/auth/guard.ts';
 import {
 	deleteAssignment,
 	getAssignmentForTeacher,
+	getSetItems,
 	updateAssignment
 } from '#lib/server/services/sets.ts';
 import { guarded, isUuid, str, strs } from '#lib/server/forms.ts';
@@ -21,7 +22,8 @@ export const load: PageServerLoad = async (event) => {
 		student: a.student.settings,
 		assignment: a.assignment.settings
 	});
-	return { a, below, effective };
+	const taskCount = (await getSetItems(db(), a.set.id)).length;
+	return { a, below, effective, taskCount };
 };
 
 export const actions: Actions = {

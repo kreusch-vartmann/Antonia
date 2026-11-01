@@ -36,16 +36,7 @@ interface StoredRun {
 
 export type ClientSettings = Pick<
 	Settings,
-	| 'readAloud'
-	| 'sound'
-	| 'calm'
-	| 'largeText'
-	| 'opponent'
-	| 'pacerSecondsPerTask'
-	| 'runTimeLimit'
-	| 'targetTime'
-	| 'showTimer'
-	| 'onWrong'
+	'readAloud' | 'sound' | 'calm' | 'largeText' | 'ghost' | 'targetTime' | 'showTimer'
 >;
 
 export interface RunPayload {
@@ -80,12 +71,9 @@ function clientSettings(s: Settings): ClientSettings {
 		sound: s.sound,
 		calm: s.calm,
 		largeText: s.largeText,
-		opponent: s.opponent,
-		pacerSecondsPerTask: s.pacerSecondsPerTask,
-		runTimeLimit: s.runTimeLimit,
+		ghost: s.ghost,
 		targetTime: s.targetTime,
-		showTimer: s.showTimer,
-		onWrong: s.onWrong
+		showTimer: s.showTimer
 	};
 }
 
@@ -99,7 +87,7 @@ async function save(kv: Kv, s: StoredRun) {
 }
 
 async function ghostFor(db: Db, s: StoredRun): Promise<[number, number][] | null> {
-	if (s.engine.settings.opponent !== 'ghost') return null;
+	if (!s.engine.settings.ghost) return null;
 	const [best] = await db
 		.select({ timeline: run.timeline })
 		.from(run)

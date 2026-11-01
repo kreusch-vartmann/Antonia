@@ -7,7 +7,6 @@ import {
 	getSetItems,
 	listAssignmentsForSet,
 	setItems,
-	updateItemSettings,
 	updateSet
 } from '#lib/server/services/sets.ts';
 import { listStudents } from '#lib/server/services/students.ts';
@@ -32,9 +31,7 @@ export const load: PageServerLoad = async (event) => {
 			itemId: i.itemId,
 			taskId: i.task.id,
 			label: formatOf(i.task.content).label1(i.task.content),
-			answer: i.task.content.answer,
-			itemSettings: i.itemSettings,
-			taskSettings: i.task.settings
+			answer: i.task.content.answer
 		})),
 		assignments,
 		students
@@ -86,14 +83,6 @@ export const actions: Actions = {
 			[order[i], order[j]] = [order[j], order[i]];
 		}
 		await setItems(db(), teacherId, event.params.id, order);
-	},
-	itemSettings: async (event) => {
-		const teacherId = requireTeacher(event);
-		const form = await event.request.formData();
-		const itemId = str(form, 'itemId');
-		if (!isUuid(itemId)) return;
-		await updateItemSettings(db(), teacherId, event.params.id, itemId, layerFromForm(form));
-		return { saved: 'item' };
 	},
 	assign: async (event) => {
 		const teacherId = requireTeacher(event);

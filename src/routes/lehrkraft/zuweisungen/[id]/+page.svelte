@@ -15,8 +15,6 @@
 	let { data, form }: PageProps = $props();
 	const a = $derived(data.a);
 	const keys = Object.keys(DEFAULT_SETTINGS) as SettingKey[];
-	// the target time is edited next to the race modes
-	const editKeys = keys.filter((k) => k !== 'targetTime');
 </script>
 
 <svelte:head><title>Zuweisung – Antonia</title></svelte:head>
@@ -51,14 +49,15 @@
 		<ModePicker
 			selected={a.assignment.modes}
 			targetTime={a.assignment.settings.targetTime}
-			inheritedTargetTime={data.below.values.targetTime}
+			taskCount={data.taskCount}
 		/>
 		<SettingsEditor
+			level="assignment"
 			layer={a.assignment.settings}
 			inherited={data.below.values}
 			inheritedSources={data.below.sources}
-			keys={editKeys}
-			title="Einstellungen nur für diese Zuweisung"
+			exclude={['targetTime']}
+			title="Weitere Optionen für diese Zuweisung"
 			open
 		/>
 	{/key}
@@ -70,8 +69,8 @@
 <section class="card">
 	<h2>So gilt es jetzt</h2>
 	<p class="muted small">
-		Reihenfolge: Standard → Aufgabe → Set → Kind → Zuweisung. Aufgabenbezogene Werte können je
-		Aufgabe abweichen.
+		So spielt das Kind mit diesem Set. Die Spalte „Festgelegt in“ zeigt, wo man den Wert ändert:
+		Einstellungen zum Kind beim Kind, zum Üben beim Aufgabenset, zum Rennen hier in der Zuweisung.
 	</p>
 	<div class="table-wrap">
 		<table>

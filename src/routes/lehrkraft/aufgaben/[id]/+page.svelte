@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import TaskFields from '#lib/components/TaskFields.svelte';
-	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
-	import { TASK_LEVEL_KEYS } from '#lib/domain/settings.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -29,11 +27,6 @@
 >
 	{#key data.task.updatedAt}
 		<TaskFields content={data.task.content} tags={data.task.tags} allTags={data.allTags} />
-		<SettingsEditor
-			layer={data.task.settings}
-			keys={TASK_LEVEL_KEYS}
-			title="Einstellungen nur für diese Aufgabe"
-		/>
 	{/key}
 	{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
 	{#if form?.saved}<p class="success" role="status">Gespeichert.</p>{/if}

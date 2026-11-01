@@ -80,8 +80,6 @@ export interface AnswerEventDraft {
 
 export interface Feedback {
 	outcome: 'correct' | 'wrong' | 'timeout' | 'ignored';
-	/** Car lost ground (setback mode). */
-	lostGround?: boolean;
 	/** Solved after the solution had been shown. */
 	afterSolution?: boolean;
 	/** Solved on the very first try. */
@@ -141,13 +139,17 @@ export function pickTaskSettings(s: Settings): TaskSettings {
 }
 
 /**
- * Race against the clock: the target time is the run time limit and the clock
- * car is the only opponent.
+ * Race against the clock: the clock car is the only opponent.
  */
 export function applyMode(settings: Settings, mode: RunMode): Settings {
 	if (mode !== 'time') return settings;
 	if (settings.targetTime <= 0) throw new Error('time race needs a target time');
-	return { ...settings, runTimeLimit: settings.targetTime, opponent: 'none' };
+	return { ...settings, ghost: false };
+}
+
+/** Time limit of the whole run in seconds: the target time of the race against the clock. */
+export function runTimeLimit(state: RunState): number {
+	return state.mode === 'time' ? state.settings.targetTime : 0;
 }
 
 export function createRun(opts: {
@@ -250,7 +252,7 @@ export function computeStars(firstTry: number, tasks: number, done: number, stat
 /** Ends the run if the overall time limit is reached. */
 export function tick(state: RunState, now: number): boolean {
 	if (state.status !== 'running') return false;
-	const limit = state.settings.runTimeLimit;
+	const limit = runTimeLimit(state);
 	if (limit > 0 && now - state.startedAt >= limit * 1000) {
 		finish(state, now, 'timeUp');
 		return true;
@@ -276,23 +278,11 @@ function eventBase(
 	};
 }
 
-function registerWrong(state: RunState, cur: Current): boolean {
+function registerWrong(state: RunState, cur: Current) {
 	const def = state.tasks[cur.taskId];
 	cur.wrong += 1;
-	let lostGround = false;
-	if (
-		state.settings.onWrong === 'setback' &&
-		cur.wrong === 1 &&
-		state.total < state.uniqueTasks * 2
-	) {
-		state.total += 1;
-		state.queue.push(cur.taskId);
-		state.requeues[cur.taskId] = (state.requeues[cur.taskId] ?? 0) + 1;
-		lostGround = true;
-	}
 	if (cur.wrong >= def.settings.solutionAfter) cur.solutionShown = true;
 	if (def.settings.hintAfter > 0 && cur.wrong >= def.settings.hintAfter) cur.hintShown = true;
-	return lostGround;
 }
 
 export function answer(
@@ -328,7 +318,6 @@ export function answer(
 		state.done += 1;
 		const needsRepeat =
 			state.settings.repeatWrong &&
-			state.settings.onWrong === 'pitstop' &&
 			(cur.wrong > 0 || cur.solutionShown || cur.timeouts > 0) &&
 			(state.requeues[cur.taskId] ?? 0) < 1;
 		if (needsRepeat) {
@@ -348,9 +337,8 @@ export function answer(
 	}
 
 	if (cur.choices) cur.disabledChoices.push(Number(value));
-	const lostGround = registerWrong(state, cur);
-	if (lostGround) mark(state, now);
-	return { state, feedback: { outcome: 'wrong', lostGround }, events: [event] };
+	registerWrong(state, cur);
+	return { state, feedback: { outcome: 'wrong' }, events: [event] };
 }
 
 export function timeout(state: RunState, input: { key: string }, now: number): StepResult {
@@ -376,15 +364,13 @@ export function timeout(state: RunState, input: { key: string }, now: number): S
 		errorPattern: null
 	};
 	cur.timeouts += 1;
-	let lostGround = false;
 	if (def.settings.onTimeout === 'wrong') {
 		if (state.mode === 'flawless') {
 			finish(state, now, 'failed');
 			return { state, feedback: { outcome: 'timeout', failed: true }, events: [event] };
 		}
-		lostGround = registerWrong(state, cur);
+		registerWrong(state, cur);
 		cur.shownAt = now;
-		if (lostGround) mark(state, now);
 	} else if (cur.timeouts >= MAX_TIMEOUTS_BEFORE_SOLUTION) {
 		cur.solutionShown = true;
 		cur.shownAt = now;
@@ -397,7 +383,7 @@ export function timeout(state: RunState, input: { key: string }, now: number): S
 		// Keep the timeout count if the same task comes right back.
 		if (state.current && state.current.taskId === def.id) state.current.timeouts = timeouts;
 	}
-	return { state, feedback: { outcome: 'timeout', lostGround }, events: [event] };
+	return { state, feedback: { outcome: 'timeout' }, events: [event] };
 }
 
 export function abort(state: RunState, now: number): RunState {

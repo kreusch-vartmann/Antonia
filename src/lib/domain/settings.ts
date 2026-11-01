@@ -5,7 +5,12 @@
  * Resolution order (later wins):
  *   system defaults → task → set → set item → student → assignment
  *
- * Run-level settings (opponent, run time limit, …) ignore the task layers.
+ * Every setting has exactly one place (or two) where it can be edited, see
+ * `levels` in SETTING_META: child (e.g. compensation for disadvantages), set
+ * (what is practised) and assignment (what the child should do now). Values
+ * stored in other layers are ignored, so no hidden overrides exist.
+ *
+ * Run-level settings (target time, ghost, …) ignore the task layers.
  */
 import { z } from 'zod';
 
@@ -18,24 +23,18 @@ export const settingsSchema = z.object({
 	hintAfter: z.number().int().min(0).max(5),
 	/** Show the solution after this many wrong attempts (child re-enters it). */
 	solutionAfter: z.number().int().min(1).max(6),
-	/** What happens to the car on a wrong answer. */
-	onWrong: z.enum(['pitstop', 'setback']),
 	/** Repeat tasks later in the run that were not solved on the first try. */
 	repeatWrong: z.boolean(),
 	/** Time limit per task in seconds (0 = off). */
 	taskTimeLimit: z.number().int().min(0).max(600),
 	/** What happens when the task time runs out. */
 	onTimeout: z.enum(['retryLater', 'wrong']),
-	/** Time limit for the whole run in seconds (0 = off). */
-	runTimeLimit: z.number().int().min(0).max(7200),
 	/** Target time in seconds for the race against the clock (0 = not offered). */
 	targetTime: z.number().int().min(0).max(7200),
 	/** Show the remaining time (fuel gauge). */
 	showTimer: z.boolean(),
-	/** Opponent in the race. */
-	opponent: z.enum(['none', 'ghost', 'pacer']),
-	/** Pacer speed: seconds per task. */
-	pacerSecondsPerTask: z.number().int().min(2).max(120),
+	/** The child's best run drives along as a ghost car. */
+	ghost: z.boolean(),
 	/** Task order within the run. */
 	order: z.enum(['fixed', 'shuffle']),
 	/** Max tasks per run (0 = all tasks of the set). */
@@ -61,15 +60,12 @@ export const DEFAULT_SETTINGS: Settings = {
 	choiceCount: 3,
 	hintAfter: 1,
 	solutionAfter: 2,
-	onWrong: 'pitstop',
 	repeatWrong: true,
 	taskTimeLimit: 0,
 	onTimeout: 'retryLater',
-	runTimeLimit: 0,
 	targetTime: 0,
 	showTimer: true,
-	opponent: 'none',
-	pacerSecondsPerTask: 15,
+	ghost: false,
 	order: 'fixed',
 	tasksPerRun: 0,
 	readAloud: 'button',
@@ -78,7 +74,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	largeText: false
 };
 
-/** Settings that only make sense for a single task. */
+/** Settings that are resolved separately for each task of a run. */
 export const TASK_LEVEL_KEYS: SettingKey[] = [
 	'answerFormat',
 	'choiceCount',
@@ -91,12 +87,22 @@ export const TASK_LEVEL_KEYS: SettingKey[] = [
 export type LayerName = 'default' | 'task' | 'set' | 'setItem' | 'student' | 'assignment';
 
 export const LAYER_LABELS: Record<LayerName, string> = {
-	default: 'Standard',
+	default: 'Standardwert',
 	task: 'Aufgabe',
 	set: 'Aufgabenset',
 	setItem: 'Aufgabe im Set',
 	student: 'Kind',
 	assignment: 'Zuweisung'
+};
+
+/** Wording for "where does the value come from". */
+export const LAYER_FROM: Record<LayerName, string> = {
+	default: 'Standardwert',
+	task: 'von der Aufgabe',
+	set: 'vom Aufgabenset',
+	setItem: 'von der Aufgabe im Set',
+	student: 'vom Kind',
+	assignment: 'von der Zuweisung'
 };
 
 export interface Layers {
@@ -123,7 +129,7 @@ export function resolveSettings(layers: Layers): Resolved {
 	for (const name of ORDER) {
 		const layer = sanitizeLayer(layers[name]);
 		for (const [k, v] of Object.entries(layer) as [SettingKey, unknown][]) {
-			if (v === undefined) continue;
+			if (v === undefined || !SETTING_META[k].levels.includes(name)) continue;
 			values[k] = v;
 			sources[k] = name;
 		}
@@ -172,7 +178,9 @@ export interface SettingMeta {
 	min?: number;
 	max?: number;
 	unit?: string;
-	group: 'Antworten' | 'Fehler & Hilfen' | 'Zeit' | 'Rennen' | 'Darstellung';
+	group: 'Antworten' | 'Hilfen bei Fehlern' | 'Zeit' | 'Rennen' | 'Darstellung';
+	/** Where this setting can be edited. Values from other layers are ignored. */
+	levels: Exclude<LayerName, 'default'>[];
 }
 
 export const SETTING_META: Record<SettingKey, SettingMeta> = {
@@ -180,6 +188,7 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		label: 'Antwortformat',
 		type: 'enum',
 		group: 'Antworten',
+		levels: ['student'],
 		options: [
 			{ value: 'keypad', label: 'Zahlenfeld (eintippen)' },
 			{ value: 'choice', label: 'Auswahl (antippen)' }
@@ -190,7 +199,8 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		type: 'number',
 		min: 2,
 		max: 4,
-		group: 'Antworten'
+		group: 'Antworten',
+		levels: ['student']
 	},
 	tasksPerRun: {
 		label: 'Aufgaben pro Rennen',
@@ -198,24 +208,27 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		type: 'number',
 		min: 0,
 		max: 200,
-		group: 'Antworten'
+		group: 'Antworten',
+		levels: ['set', 'assignment']
 	},
 	order: {
 		label: 'Reihenfolge',
 		type: 'enum',
 		group: 'Antworten',
+		levels: ['set', 'assignment'],
 		options: [
 			{ value: 'fixed', label: 'wie im Set' },
 			{ value: 'shuffle', label: 'gemischt' }
 		]
 	},
 	hintAfter: {
-		label: 'Hilfe zeigen nach … Fehlversuchen',
-		help: '0 = keine Hilfe',
+		label: 'Tipp zeigen nach … Fehlversuchen',
+		help: '0 = kein Tipp',
 		type: 'number',
 		min: 0,
 		max: 5,
-		group: 'Fehler & Hilfen'
+		group: 'Hilfen bei Fehlern',
+		levels: ['set']
 	},
 	solutionAfter: {
 		label: 'Lösung zeigen nach … Fehlversuchen',
@@ -223,95 +236,83 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		type: 'number',
 		min: 1,
 		max: 6,
-		group: 'Fehler & Hilfen'
-	},
-	onWrong: {
-		label: 'Bei falscher Antwort',
-		type: 'enum',
-		group: 'Fehler & Hilfen',
-		options: [
-			{ value: 'pitstop', label: 'Boxenstopp (Auto bleibt stehen)' },
-			{ value: 'setback', label: 'Zurückfallen (Aufgabe kommt zusätzlich)' }
-		]
+		group: 'Hilfen bei Fehlern',
+		levels: ['set']
 	},
 	repeatWrong: {
 		label: 'Nicht sofort gelöste Aufgaben später wiederholen',
 		type: 'boolean',
-		group: 'Fehler & Hilfen'
+		group: 'Hilfen bei Fehlern',
+		levels: ['set']
 	},
 	taskTimeLimit: {
 		label: 'Zeit pro Aufgabe',
-		help: '0 = aus',
+		help: '0 = keine Begrenzung',
 		type: 'number',
 		min: 0,
 		max: 600,
 		unit: 's',
-		group: 'Zeit'
+		group: 'Zeit',
+		levels: ['set', 'student']
 	},
 	onTimeout: {
 		label: 'Wenn die Zeit pro Aufgabe abläuft',
 		type: 'enum',
 		group: 'Zeit',
+		levels: ['set', 'student'],
 		options: [
 			{ value: 'retryLater', label: 'Aufgabe kommt später nochmal' },
 			{ value: 'wrong', label: 'als Fehlversuch werten' }
 		]
 	},
-	runTimeLimit: {
-		label: 'Zeit für das ganze Rennen',
-		help: 'Danach endet das Rennen. Nicht zu verwechseln mit der Zielzeit des Zeitrennens. 0 = aus',
-		type: 'number',
-		min: 0,
-		max: 7200,
-		unit: 's',
-		group: 'Zeit'
+	showTimer: {
+		label: 'Zeitanzeige (Tank) sichtbar',
+		type: 'boolean',
+		group: 'Zeit',
+		levels: ['set', 'student']
 	},
 	targetTime: {
-		label: 'Zielzeit für das Zeitrennen (Zeitmonstertruck)',
-		help: 'Die Rennart (Normal, Fehlerfrei, Gegen die Zeit) wählt das Kind selbst. „Gegen die Zeit“ wird nur angeboten, wenn hier eine Zielzeit steht; der Zeitmonstertruck erreicht das Ziel genau dann. 0 = nicht angeboten.',
+		label: 'Zielzeit für „Gegen die Zeit“',
+		help: 'Der Zeitmonstertruck erreicht das Ziel genau nach dieser Zeit.',
 		type: 'number',
 		min: 0,
 		max: 7200,
 		unit: 's',
-		group: 'Rennen'
-	},
-	showTimer: { label: 'Zeitanzeige (Tank) sichtbar', type: 'boolean', group: 'Zeit' },
-	opponent: {
-		label: 'Gegner',
-		type: 'enum',
 		group: 'Rennen',
-		options: [
-			{ value: 'none', label: 'keiner' },
-			{ value: 'ghost', label: 'Geister-Auto (eigene Bestleistung)' },
-			{ value: 'pacer', label: 'Computer-Auto' }
-		]
+		levels: ['assignment']
 	},
-	pacerSecondsPerTask: {
-		label: 'Tempo Computer-Auto (Sekunden pro Aufgabe)',
-		type: 'number',
-		min: 2,
-		max: 120,
-		unit: 's',
-		group: 'Rennen'
+	ghost: {
+		label: 'Geister-Auto (die eigene Bestzeit fährt mit)',
+		help: 'Nicht beim Rennen „Gegen die Zeit“.',
+		type: 'boolean',
+		group: 'Rennen',
+		levels: ['student', 'assignment']
 	},
 	readAloud: {
 		label: 'Vorlesen',
 		type: 'enum',
 		group: 'Darstellung',
+		levels: ['student'],
 		options: [
 			{ value: 'off', label: 'aus' },
 			{ value: 'button', label: 'per Knopf' },
 			{ value: 'auto', label: 'automatisch' }
 		]
 	},
-	sound: { label: 'Töne', type: 'boolean', group: 'Darstellung' },
+	sound: { label: 'Töne', type: 'boolean', group: 'Darstellung', levels: ['student'] },
 	calm: {
 		label: 'Reizarmer Modus',
 		help: 'keine Animationen, ruhige Darstellung',
 		type: 'boolean',
-		group: 'Darstellung'
+		group: 'Darstellung',
+		levels: ['student']
 	},
-	largeText: { label: 'Große Schrift', type: 'boolean', group: 'Darstellung' }
+	largeText: {
+		label: 'Große Schrift',
+		type: 'boolean',
+		group: 'Darstellung',
+		levels: ['student']
+	}
 };
 
 export function formatSettingValue(key: SettingKey, value: unknown): string {
@@ -321,4 +322,11 @@ export function formatSettingValue(key: SettingKey, value: unknown): string {
 		return meta.options?.find((o) => o.value === value)?.label ?? String(value);
 	if (meta.unit && value === 0) return 'aus';
 	return meta.unit ? `${value} ${meta.unit}` : String(value);
+}
+
+/** Settings that can be edited at the given level. */
+export function keysForLevel(level: Exclude<LayerName, 'default'>): SettingKey[] {
+	return (Object.keys(SETTING_META) as SettingKey[]).filter((k) =>
+		SETTING_META[k].levels.includes(level)
+	);
 }

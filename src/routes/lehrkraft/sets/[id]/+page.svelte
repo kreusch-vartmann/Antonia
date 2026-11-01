@@ -3,21 +3,14 @@
 	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
 	import ModePicker from '#lib/components/ModePicker.svelte';
 	import { MODE_LABEL } from '#lib/domain/modes.ts';
-	import {
-		DEFAULT_SETTINGS,
-		TASK_LEVEL_KEYS,
-		resolveSettings,
-		type SettingKey
-	} from '#lib/domain/settings.ts';
+	import { resolveSettings } from '#lib/domain/settings.ts';
 	import { date, fullName, stars } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const setResolved = $derived(resolveSettings({}));
+	let pickerKey = $state(0);
 	const forAssignment = $derived(resolveSettings({ set: data.set.settings }));
-	const assignKeys = (Object.keys(DEFAULT_SETTINGS) as SettingKey[]).filter(
-		(k) => k !== 'targetTime'
-	);
 	const keep =
 		() =>
 		async ({ update }: { update: (o?: { reset?: boolean }) => Promise<void> }) =>
@@ -42,6 +35,7 @@
 		</label>
 		{#key data.set.updatedAt}
 			<SettingsEditor
+				level="set"
 				layer={data.set.settings}
 				inherited={setResolved.values}
 				inheritedSources={setResolved.sources}
@@ -75,7 +69,6 @@
 	{:else}
 		<ol class="items">
 			{#each data.items as item, i (item.itemId)}
-				{@const r = resolveSettings({ task: item.taskSettings, set: data.set.settings })}
 				<li>
 					<div class="spread">
 						<span>
@@ -106,18 +99,6 @@
 							</form>
 						</span>
 					</div>
-					<form method="POST" action="?/itemSettings" use:enhance={keep} class="item-settings">
-						<input type="hidden" name="itemId" value={item.itemId} />
-						<SettingsEditor
-							layer={item.itemSettings}
-							inherited={r.values}
-							inheritedSources={r.sources}
-							keys={TASK_LEVEL_KEYS}
-							prefix="s."
-							title="Einstellungen für diese Aufgabe im Set"
-						/>
-						<button class="btn small">Speichern</button>
-					</form>
 				</li>
 			{/each}
 		</ol>
@@ -159,7 +140,16 @@
 	{#if data.students.length === 0}
 		<p class="muted">Lege zuerst <a href="/lehrkraft/kinder/neu">Kinder</a> an.</p>
 	{:else}
-		<form method="POST" action="?/assign" use:enhance class="stack">
+		<form
+			method="POST"
+			action="?/assign"
+			use:enhance={() =>
+				async ({ update }) => {
+					await update();
+					pickerKey++;
+				}}
+			class="stack"
+		>
 			<h3>Neu zuweisen</h3>
 			<div class="row">
 				{#each data.students as s (s.id)}
@@ -172,13 +162,16 @@
 				<label class="field"><span>Ab (optional)</span><input type="date" name="startsOn" /></label>
 				<label class="field"><span>Bis (optional)</span><input type="date" name="endsOn" /></label>
 			</div>
-			<ModePicker inheritedTargetTime={forAssignment.values.targetTime} />
+			{#key pickerKey}
+				<ModePicker taskCount={data.items.length} />
+			{/key}
 			<SettingsEditor
+				level="assignment"
 				layer={{}}
 				inherited={forAssignment.values}
 				inheritedSources={forAssignment.sources}
-				keys={assignKeys}
-				title="Besondere Einstellungen für diese Zuweisung (optional)"
+				exclude={['targetTime']}
+				title="Weitere Optionen für diese Zuweisung"
 			/>
 			{#if form?.saved === 'assign'}<p class="success" role="status">Zugewiesen.</p>{/if}
 			<div>
@@ -205,16 +198,5 @@
 	.items form {
 		display: inline-flex;
 		gap: var(--space-1);
-	}
-	.item-settings {
-		display: flex !important;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--space-2);
-		margin-top: var(--space-2);
-		width: 100%;
-	}
-	.item-settings :global(details) {
-		width: 100%;
 	}
 </style>

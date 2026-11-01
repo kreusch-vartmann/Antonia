@@ -174,9 +174,11 @@ export async function removeSet(db: Db, teacherId: string, id: string) {
 
 // ---------- Assignments ----------
 
-function requireModes(values: string[]): RunMode[] {
+function requireModes(values: string[], targetTime: number): RunMode[] {
 	const modes = cleanModes(values);
 	if (modes.length === 0) throw new ValidationError('Bitte mindestens eine Rennart auswählen.');
+	if (modes.includes('time') && targetTime <= 0)
+		throw new ValidationError('Für „Gegen die Zeit“ bitte eine Zielzeit eintragen.');
 	return modes;
 }
 
@@ -206,7 +208,11 @@ export async function assign(
 		modes?: RunMode[];
 	}
 ) {
-	const modes = input.modes === undefined ? [...RUN_MODES] : requireModes(input.modes);
+	const targetTime = sanitizeLayer(input.settings ?? {}).targetTime ?? 0;
+	const modes =
+		input.modes === undefined
+			? ([...RUN_MODES].filter((m) => m !== 'time' || targetTime > 0) as RunMode[])
+			: requireModes(input.modes, targetTime);
 	const set = await getSet(db, teacherId, input.setId);
 	if (!set) throw new ValidationError('Set nicht gefunden.');
 	const startsOn = cleanDate(input.startsOn);
@@ -265,9 +271,12 @@ export async function updateAssignment(
 		modes?: RunMode[];
 	}
 ) {
-	const modes = input.modes === undefined ? undefined : requireModes(input.modes);
 	const a = await getAssignmentForTeacher(db, teacherId, id);
 	if (!a) throw new ValidationError('Zuweisung nicht gefunden.');
+	const modes =
+		input.modes === undefined
+			? undefined
+			: requireModes(input.modes, sanitizeLayer(input.settings ?? {}).targetTime ?? 0);
 	const startsOn = cleanDate(input.startsOn);
 	const endsOn = cleanDate(input.endsOn);
 	if (startsOn && endsOn && startsOn > endsOn)

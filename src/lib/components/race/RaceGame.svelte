@@ -62,10 +62,9 @@
 	const taskRemaining = $derived(
 		cur && cur.taskTimeLimit > 0 ? cur.taskTimeLimit * 1000 - taskElapsed : null
 	);
+	// Only the race against the clock limits the whole run.
 	const runRemaining = $derived(
-		settings.runTimeLimit > 0 && view.status === 'running'
-			? settings.runTimeLimit * 1000 - runElapsed
-			: null
+		mode === 'time' && view.status === 'running' ? settings.targetTime * 1000 - runElapsed : null
 	);
 
 	// svelte-ignore state_referenced_locally
@@ -74,15 +73,6 @@
 		const f = view.fraction;
 		untrack(() => progress.set(f, { duration: calm ? 0 : 900 }));
 	});
-
-	const pacerFraction = $derived(
-		settings.opponent === 'pacer'
-			? Math.min(
-					1,
-					runElapsed / (settings.pacerSecondsPerTask * 1000 * Math.max(1, view.uniqueTasks))
-				)
-			: 0
-	);
 
 	// Race against the clock: this car reaches the finish exactly at the target time.
 	const clockFraction = $derived(
@@ -111,7 +101,7 @@
 
 	const cars = $derived.by(() => {
 		const list: TrackCar[] = [];
-		if (settings.opponent === 'ghost' && payload.ghost) {
+		if (settings.ghost && payload.ghost) {
 			list.push({
 				id: 'ghost',
 				fraction: ghostAt(runElapsed),
@@ -120,9 +110,6 @@
 				lane: -1,
 				ghost: true
 			});
-		}
-		if (settings.opponent === 'pacer') {
-			list.push({ id: 'pacer', fraction: pacerFraction, model: 'racer', color: 'yellow', lane: 1 });
 		}
 		if (mode === 'time') {
 			list.push({
@@ -210,7 +197,6 @@
 			if (settings.sound) sounds.wrong();
 			lastWrong = given ?? null;
 			let text = 'Noch nicht – probier es nochmal.';
-			if (fb.lostGround) text = 'Noch nicht. Dein Auto rollt ein Stück zurück – du schaffst das!';
 			const c = payload.view.current;
 			if (c?.solution) text = `Die Lösung ist ${c.solution}. Gib sie ein.`;
 			else if (c?.hint) text = `Boxenstopp! Hier ist ein Tipp.`;
@@ -371,12 +357,9 @@
 			{/if}
 			<div class="legend">
 				<span class="me"><RaceCar model={car.model} color={car.color} size={34} /> {name}</span>
-				{#if settings.opponent === 'ghost' && payload.ghost}
+				{#if settings.ghost && payload.ghost}
 					<span><RaceCar model={car.model} color={car.color} size={34} ghost /> deine Bestzeit</span
 					>
-				{/if}
-				{#if settings.opponent === 'pacer'}
-					<span><RaceCar model="racer" color="yellow" size={34} /> Computer</span>
 				{/if}
 				{#if mode === 'time'}
 					<span
@@ -445,7 +428,7 @@
 								Du hast <strong>{view.result.done}</strong> Aufgaben gerechnet. {view.result
 									.firstTry} davon waren sofort richtig.
 							</p>
-							{#if settings.opponent === 'ghost'}
+							{#if settings.ghost}
 								{#if ghostDuration === null}
 									<p>Das war deine erste Fahrt – beim nächsten Mal fährt dein Geister-Auto mit!</p>
 								{:else if view.status === 'finished' && view.result.durationMs < ghostDuration}

@@ -82,9 +82,11 @@ Der Container läuft als Nicht-root-Benutzer.
    optional mit Zeitraum). Bei jeder Zuweisung legt die Lehrkraft fest, welche
    **Rennarten** das Kind mit diesem Set fahren darf (Normal, Fehlerfrei, Gegen die Zeit).
    „Gegen die Zeit“ erscheint nur mit eingetragener Zielzeit.
-4. **Einstellungen** gibt es auf jeder Ebene: Aufgabe → Set → Aufgabe im Set → Kind →
-   Zuweisung (spezifischere Ebene gewinnt). Die Zuweisungsseite zeigt, welcher Wert
-   woher kommt.
+4. **Einstellungen** hat jede Einstellung an genau einem Ort: Was das Kind braucht
+   (Vorlesen, Töne, Antwortformat, Nachteilsausgleich bei Zeitlimits) steht beim **Kind**.
+   Was geübt wird (Reihenfolge, Hilfen, Zeit pro Aufgabe) steht beim **Aufgabenset**.
+   Was das Kind jetzt tun soll (Rennarten, Zielzeit, Geister-Auto) steht in der **Zuweisung**.
+   Jede Maske zeigt bei „Voreinstellung“, welcher Wert gilt und woher er kommt.
 5. Kinder melden sich an, wählen in der **Garage** ihr Auto und fahren das **Rennen**.
 6. **Auswertung**: Übersicht, Lernstand je Kind (Aufgabenarten, Fehlermuster,
    Verlauf, Rennen), Detail je Rennen, CSV-Export, Druckansicht (als PDF speicherbar).

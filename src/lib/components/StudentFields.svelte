@@ -86,6 +86,10 @@
 	<small>Bitte keine Diagnosen oder Gesundheitsdaten eintragen.</small>
 </label>
 
-<SettingsEditor layer={settings} title="Einstellungen für dieses Kind (z. B. Nachteilsausgleich)" />
+<SettingsEditor
+	level="student"
+	layer={settings}
+	title="Einstellungen für dieses Kind (z. B. Nachteilsausgleich)"
+/>
 
 {#if error}<p class="error" role="alert">{error}</p>{/if}

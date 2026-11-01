@@ -27,7 +27,7 @@
 		<input name="description" maxlength="1000" value={form?.description ?? ''} />
 	</label>
 	<p class="muted small">Szenario: Autorennen. Weitere Szenarien folgen.</p>
-	<SettingsEditor layer={{}} title="Einstellungen für dieses Set" />
+	<SettingsEditor level="set" layer={{}} title="Einstellungen für dieses Set" />
 	{#if form?.error}<p class="error">{form.error}</p>{/if}
 	<div><button class="btn btn-primary big">Anlegen & Aufgaben auswählen</button></div>
 </form>

@@ -233,7 +233,7 @@ describe('full flow: set → assignment → race → evaluation', () => {
 });
 
 describe('race modes and trophies', () => {
-	async function fixture(setSettings = {}) {
+	async function fixture(assignmentSettings = {}) {
 		const t = await teacher();
 		const s = await createStudent(db, t, {
 			firstName: 'Mia',
@@ -246,12 +246,8 @@ describe('race modes and trophies', () => {
 			t,
 			drafts.map((d) => ({ content: d.content, tags: d.tags, origin: d.origin }))
 		);
-		const setId = await createSet(db, t, {
-			name: '5er-Reihe',
-			taskIds: ids,
-			settings: setSettings
-		});
-		await assign(db, t, { setId, studentIds: [s] });
+		const setId = await createSet(db, t, { name: '5er-Reihe', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s], settings: assignmentSettings });
 		const [a] = await activeAssignmentsForChild(db, s);
 		return { t, s, a };
 	}
@@ -306,6 +302,7 @@ describe('race modes and trophies', () => {
 	it('time race is not available without a target time', async () => {
 		const { s, a } = await fixture();
 		expect(a.targetTime).toBe(0);
+		expect(a.modes).toEqual(['normal', 'flawless']);
 		await expect(startOrResumeRun(db, kv, s, a.id, 'time', Date.now())).rejects.toBeInstanceOf(
 			ValidationError
 		);
@@ -316,7 +313,7 @@ describe('race modes and trophies', () => {
 		expect(a.targetTime).toBe(60);
 		const T = Date.now();
 		const start = await startOrResumeRun(db, kv, s, a.id, 'time', T);
-		expect(start.settings).toMatchObject({ targetTime: 60, runTimeLimit: 60, opponent: 'none' });
+		expect(start.settings).toMatchObject({ targetTime: 60, ghost: false });
 
 		// too slow: no trophy
 		const late = await act(db, kv, s, start.runId, { type: 'tick' }, T + 61_000);
@@ -400,7 +397,7 @@ describe('race modes and trophies', () => {
 		const { t, s, a } = await fixture({ targetTime: 600 });
 		expect(a.modes).toEqual(['normal', 'flawless', 'time']);
 
-		await updateAssignment(db, t, a.id, { modes: ['flawless'] });
+		await updateAssignment(db, t, a.id, { modes: ['flawless'], settings: { targetTime: 600 } });
 		const [only] = await activeAssignmentsForChild(db, s);
 		expect(only.modes).toEqual(['flawless']);
 		await expect(startOrResumeRun(db, kv, s, a.id, 'normal')).rejects.toBeInstanceOf(
@@ -416,10 +413,18 @@ describe('race modes and trophies', () => {
 		expect(list[0].modes).toEqual(['flawless']);
 	});
 
-	it('the time race needs the teacher to allow it and to set a target time', async () => {
+	it('the time race needs a target time: the teacher is asked for it', async () => {
 		const { t, s, a } = await fixture(); // no target time
-		expect((await activeAssignmentsForChild(db, s))[0].modes).toEqual(['normal', 'flawless']);
-		await updateAssignment(db, t, a.id, { modes: ['time'] });
+		await expect(
+			updateAssignment(db, t, a.id, { modes: ['time'], settings: {} })
+		).rejects.toBeInstanceOf(ValidationError);
+		await updateAssignment(db, t, a.id, { modes: ['time'], settings: { targetTime: 90 } });
+		expect((await activeAssignmentsForChild(db, s))[0]).toMatchObject({
+			modes: ['time'],
+			targetTime: 90
+		});
+		// a leftover without target time (old data) is never offered to the child
+		await db.update(schema.assignment).set({ settings: {} });
 		expect((await activeAssignmentsForChild(db, s))[0].modes).toEqual([]);
 	});
 

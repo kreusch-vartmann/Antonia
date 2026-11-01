@@ -42,7 +42,7 @@ describe('run engine', () => {
 	it('pitstop: wrong answer does not move the car; hint then solution', () => {
 		const s = setup({ hintAfter: 1, solutionAfter: 2 });
 		const r1 = answer(s, { key: key(s), value: '99', ms: 500 }, 100);
-		expect(r1.feedback).toMatchObject({ outcome: 'wrong', lostGround: false });
+		expect(r1.feedback).toMatchObject({ outcome: 'wrong' });
 		expect(view(s, 100).fraction).toBe(0);
 		expect(view(s, 100).current!.hint).not.toBeNull();
 		expect(view(s, 100).current!.solution).toBeNull();
@@ -65,18 +65,6 @@ describe('run engine', () => {
 		expect(s.status).toBe('finished');
 		expect(s.total).toBe(2);
 		expect(view(s, 5).result?.stars).toBe(1);
-	});
-
-	it('setback: wrong answer loses ground (task is added again)', () => {
-		const s = setup({ onWrong: 'setback' });
-		answer(s, { key: key(s), value: solution(s), ms: 1 }, 1);
-		const before = view(s, 1).fraction;
-		const r = answer(s, { key: key(s), value: '0', ms: 1 }, 2);
-		expect(r.feedback.lostGround).toBe(true);
-		expect(view(s, 2).fraction).toBeLessThan(before);
-		// second wrong attempt on the same presentation does not add more
-		answer(s, { key: key(s), value: '1', ms: 1 }, 3);
-		expect(s.total).toBe(4);
 	});
 
 	it('choice mode: offers distinct choices incl. the answer and disables wrong picks', () => {
@@ -111,16 +99,6 @@ describe('run engine', () => {
 		timeout(s, { key: k2 }, 20_000);
 		expect(view(s, 20_000).current!.solution).toBe('5');
 		expect(view(s, 20_000).current!.taskTimeLimit).toBe(0);
-	});
-
-	it('run time limit ends the run', () => {
-		const s = setup({ runTimeLimit: 60 });
-		answer(s, { key: key(s), value: solution(s), ms: 1 }, 1000);
-		expect(tick(s, 61_000)).toBe(true);
-		const v = view(s, 61_000);
-		expect(v.status).toBe('timeUp');
-		expect(v.result?.done).toBe(1);
-		expect(v.result?.stars).toBe(1);
 	});
 
 	it('respects tasksPerRun and shuffle deterministically', () => {
@@ -190,14 +168,20 @@ describe('run engine', () => {
 		});
 
 		it('is won by reaching the finish in time, mistakes allowed', () => {
-			const s = setup({ targetTime: 60, opponent: 'pacer' }, 2, 'time');
-			expect(s.settings).toMatchObject({ runTimeLimit: 60, opponent: 'none' });
+			const s = setup({ targetTime: 60, ghost: true }, 2, 'time');
+			expect(s.settings).toMatchObject({ targetTime: 60, ghost: false });
 			answer(s, { key: key(s), value: '99', ms: 1 }, 1000);
 			answer(s, { key: key(s), value: solution(s), ms: 1 }, 2000);
 			answer(s, { key: key(s), value: solution(s), ms: 1 }, 59_000);
 			// the task repeated after a mistake is still open
 			answer(s, { key: key(s), value: solution(s), ms: 1 }, 59_999);
 			expect(view(s, 59_999)).toMatchObject({ status: 'finished', mode: 'time' });
+		});
+
+		it('a normal race has no time limit', () => {
+			const s = setup({ targetTime: 60 }, 3, 'normal');
+			expect(tick(s, 3_600_000)).toBe(false);
+			expect(s.status).toBe('running');
 		});
 
 		it('is lost when the clock car reaches the finish first', () => {
