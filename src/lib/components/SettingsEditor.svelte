@@ -2,6 +2,7 @@
 	import {
 		DEFAULT_SETTINGS,
 		LAYER_FROM,
+		formatSettingValue,
 		SETTING_META,
 		keysForLevel,
 		type LayerName,
@@ -90,8 +91,15 @@
 									<option value="false" selected={current === false}>Nein</option>
 								{:else}
 									{#each meta.options ?? [] as o (o.value)}
-										<option value={o.value} selected={current === o.value}>{o.label}</option>
+										<option value={o.value} selected={String(current) === o.value}>{o.label}</option
+										>
 									{/each}
+									{#if !(meta.options ?? []).some((o) => o.value === String(current))}
+										<!-- a stored value that is not among the usual choices -->
+										<option value={String(current)} selected
+											>{formatSettingValue(k, current)}</option
+										>
+									{/if}
 								{/if}
 							</select>
 						{/if}

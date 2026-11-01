@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_SETTINGS,
+	SETTING_META,
+	formatSettingValue,
 	keysForLevel,
 	layerFromForm,
 	resolveSettings,
-	sanitizeLayer
+	sanitizeLayer,
+	settingsSchema,
+	type SettingKey
 } from './settings';
 
 describe('settings inheritance', () => {
@@ -78,5 +82,20 @@ describe('settings inheritance', () => {
 		f.set('s.solutionAfter', '2');
 		f.set('s.~solutionAfter', '2');
 		expect(layerFromForm(f)).toEqual({ order: 'shuffle', hintAfter: 2 });
+	});
+
+	it('every dropdown option is a valid value and zero options have words, not a 0', () => {
+		for (const key of Object.keys(SETTING_META) as SettingKey[]) {
+			for (const o of SETTING_META[key].options ?? []) {
+				const def = DEFAULT_SETTINGS[key];
+				const value = typeof def === 'number' ? Number(o.value) : o.value;
+				expect(settingsSchema.shape[key].safeParse(value).success, `${key}=${o.value}`).toBe(true);
+				expect(o.label, key).not.toMatch(/^\d+$/);
+			}
+		}
+		expect(formatSettingValue('tasksPerRun', 0)).toBe('Alle Aufgaben des Sets');
+		expect(formatSettingValue('hintAfter', 0)).toBe('Kein Tipp');
+		expect(formatSettingValue('taskTimeLimit', 0)).toBe('Keine Begrenzung');
+		expect(formatSettingValue('taskTimeLimit', 25)).toBe('25 Sekunden');
 	});
 });

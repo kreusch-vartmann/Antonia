@@ -184,7 +184,18 @@ export interface SettingMeta {
 	group: 'Antworten' | 'Hilfen bei Fehlern' | 'Zeit' | 'Rennen' | 'Darstellung';
 	/** Where this setting can be edited. Values from other layers are ignored. */
 	levels: Exclude<LayerName, 'default'>[];
+	/** Label for stored numbers that are not among the options. */
+	formatNumber?: (n: number) => string;
 }
+
+type Option = { value: string; label: string };
+
+/** Numeric choices, shown as a dropdown; the value is stored as a number. */
+const numeric = (values: number[], label: (n: number) => string): Option[] =>
+	values.map((n) => ({ value: String(n), label: label(n) }));
+
+const tries = (n: number) => (n === 1 ? 'Nach 1 Fehlversuch' : `Nach ${n} Fehlversuchen`);
+const seconds = (n: number) => (n % 60 === 0 && n >= 120 ? `${n / 60} Minuten` : `${n} Sekunden`);
 
 export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	answerFormat: {
@@ -199,18 +210,23 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	},
 	choiceCount: {
 		label: 'Anzahl Auswahlmöglichkeiten',
-		type: 'number',
-		min: 2,
-		max: 4,
+		type: 'enum',
+		options: numeric([2, 3, 4], (n) => `${n} Möglichkeiten`),
+		formatNumber: (n) => `${n} Möglichkeiten`,
 		group: 'Antworten',
 		levels: ['student']
 	},
 	tasksPerRun: {
 		label: 'Aufgaben pro Rennen',
-		help: '0 = alle Aufgaben des Sets',
-		type: 'number',
-		min: 0,
-		max: 200,
+		type: 'enum',
+		options: [
+			{ value: '0', label: 'Alle Aufgaben des Sets' },
+			...numeric(
+				[...Array.from({ length: 28 }, (_, i) => i + 3), 35, 40, 45, 50, 60, 75, 100, 150, 200],
+				(n) => `${n} Aufgaben`
+			)
+		],
+		formatNumber: (n) => `${n} Aufgaben`,
 		group: 'Antworten',
 		levels: ['set', 'assignment']
 	},
@@ -225,20 +241,19 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		]
 	},
 	hintAfter: {
-		label: 'Tipp zeigen nach … Fehlversuchen',
-		help: '0 = kein Tipp',
-		type: 'number',
-		min: 0,
-		max: 5,
+		label: 'Tipp zeigen',
+		type: 'enum',
+		options: [{ value: '0', label: 'Kein Tipp' }, ...numeric([1, 2, 3, 4, 5], tries)],
+		formatNumber: tries,
 		group: 'Hilfen bei Fehlern',
 		levels: ['set']
 	},
 	solutionAfter: {
-		label: 'Lösung zeigen nach … Fehlversuchen',
+		label: 'Lösung zeigen',
 		help: 'Das Kind gibt die gezeigte Lösung dann selbst ein.',
-		type: 'number',
-		min: 1,
-		max: 6,
+		type: 'enum',
+		options: numeric([1, 2, 3, 4, 5, 6], tries),
+		formatNumber: tries,
 		group: 'Hilfen bei Fehlern',
 		levels: ['set']
 	},
@@ -250,11 +265,12 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	},
 	taskTimeLimit: {
 		label: 'Zeit pro Aufgabe',
-		help: '0 = keine Begrenzung',
-		type: 'number',
-		min: 0,
-		max: 600,
-		unit: 's',
+		type: 'enum',
+		options: [
+			{ value: '0', label: 'Keine Begrenzung' },
+			...numeric([10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600], seconds)
+		],
+		formatNumber: seconds,
 		group: 'Zeit',
 		levels: ['set', 'student']
 	},
@@ -264,8 +280,8 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		group: 'Zeit',
 		levels: ['set', 'student'],
 		options: [
-			{ value: 'retryLater', label: 'Aufgabe kommt später nochmal' },
-			{ value: 'wrong', label: 'als Fehlversuch werten' }
+			{ value: 'retryLater', label: 'Später nochmal stellen' },
+			{ value: 'wrong', label: 'Als Fehlversuch werten' }
 		]
 	},
 	showTimer: {
@@ -321,8 +337,13 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 export function formatSettingValue(key: SettingKey, value: unknown): string {
 	const meta = SETTING_META[key];
 	if (meta.type === 'boolean') return value ? 'Ja' : 'Nein';
-	if (meta.type === 'enum')
-		return meta.options?.find((o) => o.value === value)?.label ?? String(value);
+	if (meta.type === 'enum') {
+		const known = meta.options?.find((o) => o.value === String(value))?.label;
+		if (known) return known;
+		return meta.formatNumber && typeof value === 'number'
+			? meta.formatNumber(value)
+			: String(value);
+	}
 	if (meta.unit && value === 0) return 'aus';
 	return meta.unit ? `${value} ${meta.unit}` : String(value);
 }
