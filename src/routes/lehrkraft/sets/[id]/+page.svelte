@@ -3,12 +3,21 @@
 	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
 	import ModePicker from '#lib/components/ModePicker.svelte';
 	import { MODE_LABEL } from '#lib/domain/modes.ts';
-	import { TASK_LEVEL_KEYS, resolveSettings } from '#lib/domain/settings.ts';
+	import {
+		DEFAULT_SETTINGS,
+		TASK_LEVEL_KEYS,
+		resolveSettings,
+		type SettingKey
+	} from '#lib/domain/settings.ts';
 	import { date, fullName, stars } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const setResolved = $derived(resolveSettings({}));
+	const forAssignment = $derived(resolveSettings({ set: data.set.settings }));
+	const assignKeys = (Object.keys(DEFAULT_SETTINGS) as SettingKey[]).filter(
+		(k) => k !== 'targetTime'
+	);
 	const keep =
 		() =>
 		async ({ update }: { update: (o?: { reset?: boolean }) => Promise<void> }) =>
@@ -163,8 +172,14 @@
 				<label class="field"><span>Ab (optional)</span><input type="date" name="startsOn" /></label>
 				<label class="field"><span>Bis (optional)</span><input type="date" name="endsOn" /></label>
 			</div>
-			<ModePicker />
-			<SettingsEditor layer={{}} title="Besondere Einstellungen für diese Zuweisung (optional)" />
+			<ModePicker inheritedTargetTime={forAssignment.values.targetTime} />
+			<SettingsEditor
+				layer={{}}
+				inherited={forAssignment.values}
+				inheritedSources={forAssignment.sources}
+				keys={assignKeys}
+				title="Besondere Einstellungen für diese Zuweisung (optional)"
+			/>
 			{#if form?.saved === 'assign'}<p class="success" role="status">Zugewiesen.</p>{/if}
 			<div>
 				<button class="btn btn-primary" disabled={data.items.length === 0}>Zuweisen</button>

@@ -7,6 +7,7 @@
 	import HintVisual from './HintVisual.svelte';
 	import Icon from '../Icon.svelte';
 	import Trophy from '../Trophy.svelte';
+	import SpeechNotice from '../SpeechNotice.svelte';
 	import {
 		CLOCK_OPPONENT,
 		FAILED_TEXT,
@@ -387,6 +388,7 @@
 		</div>
 
 		<section class="panel">
+			<SpeechNotice />
 			{#if confirmExit}
 				<div class="center stack">
 					<p class="big-text">Möchtest du aufhören?</p>

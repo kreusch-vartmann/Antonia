@@ -1,4 +1,11 @@
 /** Browser text-to-speech (Web Speech API), German. */
+import { writable } from 'svelte/store';
+
+/** Set when the browser does not actually speak, e.g. no speech engine installed. */
+export const speechProblem = writable<string | null>(null);
+
+const NO_SPEECH =
+	'Die Sprachausgabe geht auf diesem Gerät gerade nicht. Bitte sag deiner Lehrerin oder deinem Lehrer Bescheid.';
 
 let voice: SpeechSynthesisVoice | null | undefined;
 
@@ -26,9 +33,28 @@ function say(text: string, rate: number) {
 	u.rate = rate;
 	if (voice) u.voice = voice;
 	active.add(u);
-	u.onend = u.onerror = () => active.delete(u);
+	let started = false;
+	u.onstart = () => {
+		started = true;
+		speechProblem.set(null);
+	};
+	u.onend = () => active.delete(u);
+	u.onerror = (e) => {
+		active.delete(u);
+		if (e.error !== 'canceled' && e.error !== 'interrupted') {
+			console.warn('speech synthesis failed:', e.error);
+			speechProblem.set(NO_SPEECH);
+		}
+	};
 	speechSynthesis.resume();
 	speechSynthesis.speak(u);
+	// Chromium without a speech engine (e.g. Linux without speech-dispatcher) stays silent without an error.
+	setTimeout(() => {
+		if (!started && active.has(u)) {
+			console.warn('speech synthesis did not start: no speech engine or voice available?');
+			speechProblem.set(NO_SPEECH);
+		}
+	}, 2000);
 }
 
 export function speak(text: string, rate = 0.9) {

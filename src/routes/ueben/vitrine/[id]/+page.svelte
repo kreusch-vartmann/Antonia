@@ -2,6 +2,7 @@
 	import HintVisual from '#lib/components/race/HintVisual.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
+	import SpeechNotice from '#lib/components/SpeechNotice.svelte';
 	import { speak, speechAvailable } from '#lib/client/speech.ts';
 	import { TROPHY_LABEL, clock } from '#lib/domain/modes.ts';
 	import { dateTime, mistakes } from '#lib/format.ts';
@@ -15,6 +16,8 @@
 
 <main class="detail">
 	<p><a class="btn big" href="/ueben/vitrine">← Zur Vitrine</a></p>
+
+	<SpeechNotice />
 
 	<header class="head">
 		<div class="cup"><Trophy kind={t.kind} label /></div>

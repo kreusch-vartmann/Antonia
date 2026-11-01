@@ -79,13 +79,21 @@ Der Container läuft als Nicht-root-Benutzer.
    einzeln anlegen. Jede erzeugte Aufgabe ist vor dem Speichern änderbar; Ergebnis,
    Lösung, falsche Auswahlantworten und Hilfetext können frei festgelegt werden.
 3. **Aufgabenset** zusammenstellen und **zuweisen** (an ein oder mehrere Kinder,
-   optional mit Zeitraum).
+   optional mit Zeitraum). Bei jeder Zuweisung legt die Lehrkraft fest, welche
+   **Rennarten** das Kind mit diesem Set fahren darf (Normal, Fehlerfrei, Gegen die Zeit).
+   „Gegen die Zeit“ erscheint nur mit eingetragener Zielzeit.
 4. **Einstellungen** gibt es auf jeder Ebene: Aufgabe → Set → Aufgabe im Set → Kind →
    Zuweisung (spezifischere Ebene gewinnt). Die Zuweisungsseite zeigt, welcher Wert
    woher kommt.
 5. Kinder melden sich an, wählen in der **Garage** ihr Auto und fahren das **Rennen**.
 6. **Auswertung**: Übersicht, Lernstand je Kind (Aufgabenarten, Fehlermuster,
    Verlauf, Rennen), Detail je Rennen, CSV-Export, Druckansicht (als PDF speicherbar).
+
+**Vorlesen** nutzt die Sprachausgabe des Browsers. Unter Linux braucht Chromium-basierte
+Browser (Chromium, Vivaldi, Brave) dafür ein installiertes Sprachsystem, z. B. unter
+Arch/Manjaro `sudo pacman -S speech-dispatcher espeak-ng` und danach den Browser neu starten.
+Ohne Sprachsystem bleibt die Ausgabe stumm; die App zeigt dann einen Hinweis. Auf iPads und
+in Safari funktioniert sie in der Regel ohne Einrichtung.
 
 Für eine Probefahrt kann die Lehrkraft ein Test-Kind anlegen und sich in einem zweiten
 Browser(-Fenster, privat) damit anmelden.

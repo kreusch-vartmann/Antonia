@@ -15,6 +15,8 @@
 	let { data, form }: PageProps = $props();
 	const a = $derived(data.a);
 	const keys = Object.keys(DEFAULT_SETTINGS) as SettingKey[];
+	// the target time is edited next to the race modes
+	const editKeys = keys.filter((k) => k !== 'targetTime');
 </script>
 
 <svelte:head><title>Zuweisung – Antonia</title></svelte:head>
@@ -46,11 +48,16 @@
 		><input type="checkbox" name="archived" checked={a.assignment.archived} /> beendet (für das Kind ausblenden)</label
 	>
 	{#key a.assignment.updatedAt}
-		<ModePicker selected={a.assignment.modes} />
+		<ModePicker
+			selected={a.assignment.modes}
+			targetTime={a.assignment.settings.targetTime}
+			inheritedTargetTime={data.below.values.targetTime}
+		/>
 		<SettingsEditor
 			layer={a.assignment.settings}
 			inherited={data.below.values}
 			inheritedSources={data.below.sources}
+			keys={editKeys}
 			title="Einstellungen nur für diese Zuweisung"
 			open
 		/>
