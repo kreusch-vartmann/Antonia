@@ -7,6 +7,7 @@
  */
 import { formatOf } from '../formats';
 import type { Hint, Presentation, TaskContent } from '../formats/types';
+import type { RunMode } from '../modes';
 import { rng, shuffle } from '../random';
 import { TASK_LEVEL_KEYS, type Settings } from '../settings';
 
@@ -21,7 +22,8 @@ export interface RunTaskDef {
 	settings: TaskSettings;
 }
 
-export type RunStatus = 'running' | 'finished' | 'timeUp' | 'aborted';
+/** `failed`: engine failure in a flawless race (a mistake was made). */
+export type RunStatus = 'running' | 'finished' | 'timeUp' | 'aborted' | 'failed';
 
 interface Current {
 	taskId: string;
@@ -38,6 +40,8 @@ interface Current {
 
 export interface RunState {
 	v: 1;
+	/** Missing in states stored before race modes existed (= normal). */
+	mode?: RunMode;
 	seed: number;
 	rngCounter: number;
 	startedAt: number;
@@ -82,6 +86,8 @@ export interface Feedback {
 	afterSolution?: boolean;
 	/** Solved on the very first try. */
 	firstTry?: boolean;
+	/** The mistake ended a flawless race (engine failure). */
+	failed?: boolean;
 }
 
 export interface StepResult {
@@ -104,6 +110,7 @@ export interface CurrentView {
 }
 
 export interface RunView {
+	mode: RunMode;
 	status: RunStatus;
 	done: number;
 	total: number;
@@ -133,20 +140,34 @@ export function pickTaskSettings(s: Settings): TaskSettings {
 	return Object.fromEntries(TASK_LEVEL_KEYS.map((k) => [k, s[k]])) as TaskSettings;
 }
 
+/**
+ * Race against the clock: the target time is the run time limit and the clock
+ * car is the only opponent.
+ */
+export function applyMode(settings: Settings, mode: RunMode): Settings {
+	if (mode !== 'time') return settings;
+	if (settings.targetTime <= 0) throw new Error('time race needs a target time');
+	return { ...settings, runTimeLimit: settings.targetTime, opponent: 'none' };
+}
+
 export function createRun(opts: {
 	tasks: RunTaskDef[];
 	settings: Settings;
 	seed: number;
 	now: number;
+	mode?: RunMode;
 }): RunState {
 	if (opts.tasks.length === 0) throw new Error('run needs at least one task');
+	const mode = opts.mode ?? 'normal';
+	const settings = applyMode(opts.settings, mode);
 	const state: RunState = {
 		v: 1,
+		mode,
 		seed: opts.seed,
 		rngCounter: 0,
 		startedAt: opts.now,
 		status: 'running',
-		settings: opts.settings,
+		settings,
 		tasks: {},
 		uniqueTasks: 0,
 		queue: [],
@@ -160,8 +181,8 @@ export function createRun(opts: {
 		timeline: [[0, 0]]
 	};
 	let list = opts.tasks;
-	if (opts.settings.order === 'shuffle') list = shuffle(list, random(state));
-	if (opts.settings.tasksPerRun > 0) list = list.slice(0, opts.settings.tasksPerRun);
+	if (settings.order === 'shuffle') list = shuffle(list, random(state));
+	if (settings.tasksPerRun > 0) list = list.slice(0, settings.tasksPerRun);
 	for (const t of list) state.tasks[t.id] = t;
 	state.queue = list.map((t) => t.id);
 	state.uniqueTasks = list.length;
@@ -218,7 +239,7 @@ function finish(state: RunState, now: number, status: RunStatus) {
 }
 
 export function computeStars(firstTry: number, tasks: number, done: number, status: RunStatus) {
-	if (status === 'aborted' || tasks === 0) return 0;
+	if (status === 'aborted' || status === 'failed' || tasks === 0) return 0;
 	if (status === 'timeUp' && done === 0) return 0;
 	const ratio = firstTry / tasks;
 	if (ratio >= 0.9) return 3;
@@ -321,6 +342,11 @@ export function answer(
 		return { state, feedback: { outcome: 'correct', afterSolution, firstTry }, events: [event] };
 	}
 
+	if (state.mode === 'flawless') {
+		finish(state, now, 'failed');
+		return { state, feedback: { outcome: 'wrong', failed: true }, events: [event] };
+	}
+
 	if (cur.choices) cur.disabledChoices.push(Number(value));
 	const lostGround = registerWrong(state, cur);
 	if (lostGround) mark(state, now);
@@ -352,6 +378,10 @@ export function timeout(state: RunState, input: { key: string }, now: number): S
 	cur.timeouts += 1;
 	let lostGround = false;
 	if (def.settings.onTimeout === 'wrong') {
+		if (state.mode === 'flawless') {
+			finish(state, now, 'failed');
+			return { state, feedback: { outcome: 'timeout', failed: true }, events: [event] };
+		}
 		lostGround = registerWrong(state, cur);
 		cur.shownAt = now;
 		if (lostGround) mark(state, now);
@@ -409,6 +439,7 @@ export function view(state: RunState, now: number): RunView {
 		};
 	}
 	return {
+		mode: state.mode ?? 'normal',
 		status: state.status,
 		done: state.done,
 		total: state.total,

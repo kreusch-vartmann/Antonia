@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MODE_LABEL } from '#lib/domain/modes.ts';
 	import { ERROR_PATTERN_LABELS } from '#lib/domain/formats/arithmetic.ts';
 	import {
 		date,
@@ -204,9 +205,9 @@
 			<table>
 				<thead>
 					<tr
-						><th>Datum</th><th>Set</th><th>Status</th><th class="num">Aufgaben</th><th class="num"
-							>sofort richtig</th
-						><th>Dauer</th><th>Sterne</th><th class="no-print"></th></tr
+						><th>Datum</th><th>Set</th><th>Rennart</th><th>Status</th><th class="num">Aufgaben</th
+						><th class="num">sofort richtig</th><th>Dauer</th><th>Sterne</th><th class="no-print"
+						></th></tr
 					>
 				</thead>
 				<tbody>
@@ -214,6 +215,7 @@
 						<tr>
 							<td>{dateTime(run.startedAt)}</td>
 							<td>{run.setName}</td>
+							<td>{MODE_LABEL[run.mode]}</td>
 							<td>{RUN_STATUS[run.status] ?? run.status}</td>
 							<td class="num">
 								{Math.min(run.tasksDone, run.tasksTotal)}/{run.tasksTotal}

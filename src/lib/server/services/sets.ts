@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
-import { sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
+import { resolveSettings, sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
 import { ValidationError } from './accounts';
 
 const { taskSet, taskSetItem, task, assignment, student } = schema;
@@ -323,9 +323,12 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 
 /** Assignments the child can currently work on. */
 export async function activeAssignmentsForChild(db: Db, studentId: string, today = todayBerlin()) {
-	return db
+	const rows = await db
 		.select({
 			id: assignment.id,
+			setSettings: taskSet.settings,
+			assignmentSettings: assignment.settings,
+			studentSettings: student.settings,
 			setName: taskSet.name,
 			description: taskSet.description,
 			endsOn: assignment.endsOn,
@@ -337,6 +340,7 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
+		.innerJoin(student, eq(student.id, assignment.studentId))
 		.where(
 			and(
 				eq(assignment.studentId, studentId),
@@ -347,4 +351,13 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			)
 		)
 		.orderBy(asc(assignment.endsOn), desc(assignment.createdAt));
+	return rows.map(({ setSettings, assignmentSettings, studentSettings, ...a }) => ({
+		...a,
+		/** Target time in seconds for the race against the clock (0 = not offered). */
+		targetTime: resolveSettings({
+			set: setSettings,
+			student: studentSettings,
+			assignment: assignmentSettings
+		}).values.targetTime
+	}));
 }

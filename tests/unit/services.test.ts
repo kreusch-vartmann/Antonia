@@ -24,10 +24,13 @@ import {
 	listAssignmentsForStudent,
 	listSets
 } from '#lib/server/services/sets.ts';
-import { act, startOrResumeRun } from '#lib/server/services/runs.ts';
+import { act, startOrResumeRun, type RunPayload } from '#lib/server/services/runs.ts';
+import { listTrophies } from '#lib/server/services/trophies.ts';
+import type { RunMode } from '#lib/domain/modes.ts';
 import { exportCsv, overview, studentReport } from '#lib/server/services/analytics.ts';
 import { generateMultiplicationRow } from '#lib/domain/generators.ts';
 import { generateTotpSecret, totpAt } from '#lib/server/auth/totp.ts';
+import { schema } from '#lib/server/db/types.ts';
 import { createSession, destroyAllSessions, validateSession } from '#lib/server/auth/session.ts';
 
 const SECRET = 'x'.repeat(40);
@@ -151,12 +154,12 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		expect(a.setName).toBe('5er-Reihe');
 
 		const T = Date.now();
-		let p = await startOrResumeRun(db, kv, s, a.id, T);
+		let p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
 		expect(p.settings.readAloud).toBe('auto');
 		expect(p.view.current?.presentation.parts[0]).toEqual({ kind: 'text', value: '1 · 5 =' });
 
 		// resume returns the same run
-		const again = await startOrResumeRun(db, kv, s, a.id, T + 500);
+		const again = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 500);
 		expect(again.runId).toBe(p.runId);
 
 		// first task wrong once (neighbor error), then right
@@ -225,5 +228,142 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		// deleting the child removes all results
 		await deleteStudent(db, t, s);
 		expect((await studentReport(db, t, s)).tasks).toBe(0);
+	});
+});
+
+describe('race modes and trophies', () => {
+	async function fixture(setSettings = {}) {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const drafts = generateMultiplicationRow({ row: 5, from: 1, to: 2 });
+		const ids = await createTasks(
+			db,
+			t,
+			drafts.map((d) => ({ content: d.content, tags: d.tags, origin: d.origin }))
+		);
+		const setId = await createSet(db, t, {
+			name: '5er-Reihe',
+			taskIds: ids,
+			settings: setSettings
+		});
+		await assign(db, t, { setId, studentIds: [s] });
+		const [a] = await activeAssignmentsForChild(db, s);
+		return { t, s, a };
+	}
+
+	const answerCurrent = (s: string, p: RunPayload, now: number, wrong = false) => {
+		const c = p.view.current!;
+		const expr = c.presentation.parts[0];
+		const value =
+			expr.kind === 'text' && !wrong
+				? String(eval(expr.value.replace('·', '*').replace('=', '')))
+				: '999';
+		return act(db, kv, s, p.runId, { type: 'answer', key: c.key, value, ms: 500 }, now);
+	};
+
+	async function drive(s: string, assignmentId: string, mode: RunMode, T: number) {
+		let p: RunPayload = await startOrResumeRun(db, kv, s, assignmentId, mode, T);
+		let n = 0;
+		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 1000 * ++n);
+		return p;
+	}
+
+	it('awards a bronze trophy for a normal race, with the set name', async () => {
+		const { s, a } = await fixture();
+		const p = await drive(s, a.id, 'normal', Date.now());
+		expect(p.view.status).toBe('finished');
+		const list = await listTrophies(db, s);
+		expect(list).toHaveLength(1);
+		expect(list[0]).toMatchObject({ kind: 'bronze', mode: 'normal', setName: '5er-Reihe' });
+	});
+
+	it('flawless: a mistake ends the run without a trophy, a clean run gets silver', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		let p = await startOrResumeRun(db, kv, s, a.id, 'flawless', T);
+		const crash = await answerCurrent(s, p, T + 1000, true);
+		p = crash;
+		expect(crash.view.status).toBe('failed');
+		expect(crash.feedback.failed).toBe(true);
+		expect(await listTrophies(db, s)).toHaveLength(0);
+
+		// the next attempt starts from scratch
+		const next = await startOrResumeRun(db, kv, s, a.id, 'flawless', T + 2000);
+		expect(next.runId).not.toBe(p.runId);
+		expect(next.view).toMatchObject({ status: 'running', done: 0 });
+
+		p = await drive(s, a.id, 'flawless', T + 3000);
+		expect(p.view.status).toBe('finished');
+		expect(p.runId).toBe(next.runId);
+		expect(await listTrophies(db, s)).toMatchObject([{ kind: 'silver', mode: 'flawless' }]);
+	});
+
+	it('time race is not available without a target time', async () => {
+		const { s, a } = await fixture();
+		expect(a.targetTime).toBe(0);
+		await expect(startOrResumeRun(db, kv, s, a.id, 'time', Date.now())).rejects.toBeInstanceOf(
+			ValidationError
+		);
+	});
+
+	it('time race awards gold with the time when the finish is reached in time', async () => {
+		const { s, a } = await fixture({ targetTime: 60 });
+		expect(a.targetTime).toBe(60);
+		const T = Date.now();
+		const start = await startOrResumeRun(db, kv, s, a.id, 'time', T);
+		expect(start.settings).toMatchObject({ targetTime: 60, runTimeLimit: 60, opponent: 'none' });
+
+		// too slow: no trophy
+		const late = await act(db, kv, s, start.runId, { type: 'tick' }, T + 61_000);
+		expect(late.view.status).toBe('timeUp');
+		expect(await listTrophies(db, s)).toHaveLength(0);
+
+		// mistakes allowed when fast enough
+		let p = await startOrResumeRun(db, kv, s, a.id, 'time', T + 100_000);
+		p = await answerCurrent(s, p, T + 101_000, true);
+		expect(p.view.status).toBe('running');
+		let n = 1;
+		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 101_000 + 1000 * ++n);
+		expect(p.view.status).toBe('finished');
+		const [gold] = await listTrophies(db, s);
+		expect(gold).toMatchObject({ kind: 'gold', mode: 'time', targetMs: 60_000 });
+		expect(gold.durationMs).toBeLessThan(60_000);
+	});
+
+	it('every successful race gives a new trophy, newest first', async () => {
+		const { s, a } = await fixture({ targetTime: 600 });
+		const T = Date.now();
+		await drive(s, a.id, 'normal', T);
+		await drive(s, a.id, 'flawless', T + 100_000);
+		await drive(s, a.id, 'time', T + 200_000);
+		await drive(s, a.id, 'normal', T + 300_000);
+		expect((await listTrophies(db, s)).map((x) => x.kind)).toEqual([
+			'bronze',
+			'gold',
+			'silver',
+			'bronze'
+		]);
+		// a finished run is never rewarded twice
+		const [run] = await db.select().from(schema.run).limit(1);
+		await expect(
+			db.insert(schema.trophy).values({
+				studentId: s,
+				runId: run.id,
+				kind: 'bronze',
+				mode: 'normal',
+				setName: 'x'
+			})
+		).rejects.toThrow();
+	});
+
+	it('trophies are deleted together with the child', async () => {
+		const { t, s, a } = await fixture();
+		await drive(s, a.id, 'normal', Date.now());
+		await deleteStudent(db, t, s);
+		expect(await listTrophies(db, s)).toHaveLength(0);
 	});
 });

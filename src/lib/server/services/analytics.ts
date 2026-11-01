@@ -170,6 +170,7 @@ export async function studentReport(db: Db, teacherId: string, studentId: string
 			id: run.id,
 			setName: taskSet.name,
 			status: run.status,
+			mode: run.mode,
 			startedAt: run.startedAt,
 			durationMs: run.durationMs,
 			stars: run.stars,

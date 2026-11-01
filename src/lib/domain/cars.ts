@@ -24,6 +24,9 @@ export interface Car {
 
 export const DEFAULT_CAR: Car = { model: 'racer', color: 'blue' };
 
+/** Colours of computer cars; not selectable by the child. */
+const OPPONENT_COLORS: Record<string, string> = { monster: '#7ac231' };
+
 export function carHex(color: string): string {
-	return CAR_COLORS.find((c) => c.id === color)?.hex ?? '#2f6fd6';
+	return CAR_COLORS.find((c) => c.id === color)?.hex ?? OPPONENT_COLORS[color] ?? '#2f6fd6';
 }

@@ -9,16 +9,17 @@ import {
 	type RunTaskDef
 } from './engine';
 import { DEFAULT_SETTINGS, type Settings } from '../settings';
+import type { RunMode } from '../modes';
 import { generateMultiplicationRow } from '../generators';
 
-function setup(overrides: Partial<Settings> = {}, n = 3) {
+function setup(overrides: Partial<Settings> = {}, n = 3, mode?: RunMode) {
 	const settings = { ...DEFAULT_SETTINGS, ...overrides };
 	const tasks: RunTaskDef[] = generateMultiplicationRow({ row: 5, from: 1, to: n }).map((d, i) => ({
 		id: `t${i + 1}`,
 		content: d.content,
 		settings: pickTaskSettings(settings)
 	}));
-	return createRun({ tasks, settings, seed: 7, now: 0 });
+	return createRun({ tasks, settings, seed: 7, now: 0, mode });
 }
 
 const key = (s: ReturnType<typeof setup>) => view(s, 0).current!.key;
@@ -140,5 +141,71 @@ describe('run engine', () => {
 		const s = setup();
 		answer(s, { key: key(s), value: solution(s), ms: 1 }, 2000);
 		expect(s.timeline.at(-1)).toEqual([2000, 0.333]);
+	});
+
+	describe('flawless race', () => {
+		it('finishes without mistakes', () => {
+			const s = setup({}, 3, 'flawless');
+			for (let i = 0; i < 3; i++)
+				answer(s, { key: key(s), value: solution(s), ms: 1 }, 100 * (i + 1));
+			expect(view(s, 400)).toMatchObject({ status: 'finished', mode: 'flawless' });
+		});
+
+		it('a single mistake is an engine failure', () => {
+			const s = setup({}, 3, 'flawless');
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 100);
+			const r = answer(s, { key: key(s), value: '99', ms: 1 }, 200);
+			expect(r.feedback).toMatchObject({ outcome: 'wrong', failed: true });
+			expect(r.events[0].correct).toBe(false);
+			const v = view(s, 200);
+			expect(v).toMatchObject({ status: 'failed', current: null });
+			expect(v.result?.stars).toBe(0);
+			// the failed run accepts no further answers
+			expect(answer(s, { key: 'x', value: '1', ms: 1 }, 300).feedback.outcome).toBe('ignored');
+		});
+
+		it('a timeout counted as a mistake is an engine failure too', () => {
+			const s = setup({ taskTimeLimit: 10, onTimeout: 'wrong' }, 3, 'flawless');
+			const r = timeout(s, { key: key(s) }, 11_000);
+			expect(r.feedback).toMatchObject({ outcome: 'timeout', failed: true });
+			expect(s.status).toBe('failed');
+		});
+
+		it('a timeout that only postpones the task is no mistake', () => {
+			const s = setup({ taskTimeLimit: 10, onTimeout: 'retryLater' }, 3, 'flawless');
+			timeout(s, { key: key(s) }, 11_000);
+			expect(s.status).toBe('running');
+		});
+
+		it('normal race tolerates mistakes', () => {
+			const s = setup({}, 3, 'normal');
+			answer(s, { key: key(s), value: '99', ms: 1 }, 100);
+			expect(s.status).toBe('running');
+		});
+	});
+
+	describe('race against the clock', () => {
+		it('needs a target time', () => {
+			expect(() => setup({ targetTime: 0 }, 3, 'time')).toThrow();
+		});
+
+		it('is won by reaching the finish in time, mistakes allowed', () => {
+			const s = setup({ targetTime: 60, opponent: 'pacer' }, 2, 'time');
+			expect(s.settings).toMatchObject({ runTimeLimit: 60, opponent: 'none' });
+			answer(s, { key: key(s), value: '99', ms: 1 }, 1000);
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 2000);
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 59_000);
+			// the task repeated after a mistake is still open
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 59_999);
+			expect(view(s, 59_999)).toMatchObject({ status: 'finished', mode: 'time' });
+		});
+
+		it('is lost when the clock car reaches the finish first', () => {
+			const s = setup({ targetTime: 60 }, 3, 'time');
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 1000);
+			const r = answer(s, { key: key(s), value: solution(s), ms: 1 }, 60_000);
+			expect(r.feedback.outcome).toBe('ignored');
+			expect(view(s, 60_000).status).toBe('timeUp');
+		});
 	});
 });

@@ -51,5 +51,6 @@ export const RUN_STATUS: Record<string, string> = {
 	running: 'läuft',
 	finished: 'beendet',
 	timeUp: 'Zeit abgelaufen',
-	aborted: 'abgebrochen'
+	aborted: 'abgebrochen',
+	failed: 'Motorschaden'
 };

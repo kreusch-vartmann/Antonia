@@ -6,6 +6,16 @@
 	import RaceCar from './RaceCar.svelte';
 	import HintVisual from './HintVisual.svelte';
 	import Icon from '../Icon.svelte';
+	import Trophy from '../Trophy.svelte';
+	import {
+		CLOCK_OPPONENT,
+		FAILED_TEXT,
+		MODE_LABEL,
+		TIME_LOST_TEXT,
+		TROPHY_FOR_MODE,
+		TROPHY_WON,
+		clock
+	} from '#lib/domain/modes.ts';
 	import { speak, speechAvailable, stopSpeaking } from '#lib/client/speech.ts';
 	import { sounds } from '#lib/client/sound.ts';
 	import type { RunPayload } from '#lib/server/services/runs.ts';
@@ -34,6 +44,9 @@
 	const cur = $derived(view.current);
 	const settings = $derived(payload.settings);
 	const calm = $derived(settings.calm);
+	const mode = $derived(view.mode);
+	const lostToClock = $derived(mode === 'time' && view.status === 'timeUp');
+	const trophyKind = $derived(view.status === 'finished' ? TROPHY_FOR_MODE[mode] : null);
 
 	// Timing (client clock relative to server snapshot)
 	let receivedAt = $state(performance.now());
@@ -70,6 +83,18 @@
 			: 0
 	);
 
+	// Race against the clock: this car reaches the finish exactly at the target time.
+	const clockFraction = $derived(
+		mode === 'time' ? Math.min(1, runElapsed / (settings.targetTime * 1000)) : 0
+	);
+	const timeLead = $derived(
+		mode === 'time' && view.status === 'running'
+			? view.fraction >= clockFraction
+				? 'me'
+				: 'clock'
+			: null
+	);
+
 	function ghostAt(t: number): number {
 		const tl = payload.ghost;
 		if (!tl || tl.length === 0) return 0;
@@ -98,12 +123,23 @@
 		if (settings.opponent === 'pacer') {
 			list.push({ id: 'pacer', fraction: pacerFraction, model: 'racer', color: 'yellow', lane: 1 });
 		}
+		if (mode === 'time') {
+			list.push({
+				id: 'clock',
+				fraction: clockFraction,
+				model: 'monster',
+				color: 'monster',
+				scale: 1.2,
+				lane: 1
+			});
+		}
 		list.push({
 			id: 'me',
 			fraction: progress.current,
 			model: car.model,
 			color: car.color,
-			lane: 0
+			lane: 0,
+			broken: view.status === 'failed'
 		});
 		return list;
 	});
@@ -159,7 +195,10 @@
 	const PRAISE = ['Super!', 'Richtig!', 'Klasse!', 'Toll gemacht!', 'Prima!'];
 
 	function feedbackMessage(fb: Feedback, given?: string) {
-		if (fb.outcome === 'correct') {
+		if (fb.failed) {
+			if (settings.sound) sounds.wrong();
+			message = null;
+		} else if (fb.outcome === 'correct') {
 			if (settings.sound) sounds.correct();
 			const text = fb.afterSolution
 				? 'Gut gemacht!'
@@ -217,7 +256,9 @@
 			sentTick = false;
 			feedbackMessage(data.feedback, given);
 			if (wasRunning && data.view.status !== 'running' && data.view.status !== 'aborted') {
-				if (settings.sound) sounds.finish();
+				// engine failure already played its sound with the feedback
+				const celebrate = data.view.status === 'finished' || !lostToClock;
+				if (settings.sound && data.view.status !== 'failed' && celebrate) sounds.finish();
 				if (settings.readAloud === 'auto') speak(endText());
 			}
 		} catch {
@@ -261,7 +302,7 @@
 			const res = await fetch('/api/run/start', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ assignmentId })
+				body: JSON.stringify({ assignmentId, mode })
 			});
 			if (!res.ok) throw new Error();
 			payload = await res.json();
@@ -283,9 +324,12 @@
 	function endText() {
 		const r = payload.view.result;
 		if (!r) return '';
+		if (payload.view.status === 'failed') return `Motorschaden! ${FAILED_TEXT}`;
+		if (lostToClock) return TIME_LOST_TEXT;
 		if (payload.view.status === 'timeUp')
 			return `Die Zeit ist um! Du hast ${r.done} Aufgaben geschafft.`;
-		return `Geschafft! Du bist im Ziel. ${r.firstTry} von ${r.tasks} Aufgaben waren sofort richtig.`;
+		const prize = trophyKind ? ` Du hast einen ${TROPHY_WON[trophyKind]} gewonnen!` : '';
+		return `Geschafft! Du bist im Ziel.${prize} ${r.firstTry} von ${r.tasks} Aufgaben waren sofort richtig.`;
 	}
 
 	const ghostDuration = $derived(payload.ghost?.at(-1)?.[0] ?? null);
@@ -295,6 +339,9 @@
 <div class="game" class:calm>
 	<header class="bar">
 		<span class="set">{setName}</span>
+		{#if mode !== 'normal'}
+			<span class="mode-chip">{MODE_LABEL[mode]}</span>
+		{/if}
 		<span class="sr-progress" aria-live="polite">
 			{#if view.status === 'running'}Aufgabe {Math.min(view.done + 1, view.total)} von {view.total}{/if}
 		</span>
@@ -311,6 +358,16 @@
 	<div class="layout">
 		<div class="track-wrap">
 			<RaceTrack {cars} {calm} />
+			{#if trophyKind}
+				<div class="trophy-pop" aria-hidden="true">
+					<div class="trophy-glow"><Trophy kind={trophyKind} /></div>
+				</div>
+			{/if}
+			{#if timeLead}
+				<p class="lead" class:me={timeLead === 'me'}>
+					{timeLead === 'me' ? 'Du liegst vorn!' : `Der ${CLOCK_OPPONENT} liegt vorn – gib Gas!`}
+				</p>
+			{/if}
 			<div class="legend">
 				<span class="me"><RaceCar model={car.model} color={car.color} size={34} /> {name}</span>
 				{#if settings.opponent === 'ghost' && payload.ghost}
@@ -319,6 +376,12 @@
 				{/if}
 				{#if settings.opponent === 'pacer'}
 					<span><RaceCar model="racer" color="yellow" size={34} /> Computer</span>
+				{/if}
+				{#if mode === 'time'}
+					<span
+						><RaceCar model="monster" color="monster" size={34} />
+						{CLOCK_OPPONENT} (Ziel: {clock(settings.targetTime * 1000)})</span
+					>
 				{/if}
 			</div>
 		</div>
@@ -338,9 +401,38 @@
 				<div class="center stack finish" aria-live="polite">
 					{#if view.status === 'aborted'}
 						<p class="big-text">Pause gemacht.</p>
+					{:else if view.status === 'failed'}
+						<p class="big-text">Motorschaden!</p>
+						<p>{FAILED_TEXT}</p>
+					{:else if lostToClock}
+						<p class="lost-text">{TIME_LOST_TEXT}</p>
 					{:else}
-						<div class="flag"><Icon name="flag" size={72} /></div>
-						<p class="big-text">{view.status === 'timeUp' ? 'Die Zeit ist um!' : 'Geschafft!'}</p>
+						{#if trophyKind}
+							<div class="won">
+								<Trophy kind={trophyKind} size={64} />
+							</div>
+						{:else}
+							<div class="flag"><Icon name="flag" size={72} /></div>
+						{/if}
+						<p class="big-text">
+							{#if view.status === 'timeUp'}
+								Die Zeit ist um!
+							{:else}
+								Geschafft!
+							{/if}
+						</p>
+						{#if trophyKind}
+							<p class="won-text">
+								Du hast einen <strong>{TROPHY_WON[trophyKind]}</strong> gewonnen!
+								<a href="/ueben/vitrine">Zur Vitrine</a>
+							</p>
+						{/if}
+						{#if mode === 'time' && view.result}
+							<p>
+								Deine Zeit: <strong>{clock(view.result.durationMs)}</strong>
+								(Ziel: {clock(settings.targetTime * 1000)})
+							</p>
+						{/if}
 						{#if view.result}
 							<div class="stars" aria-label="{view.result.stars} von 3 Sternen">
 								{#each [1, 2, 3] as n (n)}
@@ -362,9 +454,14 @@
 							{/if}
 						{/if}
 					{/if}
+					{#if view.status !== 'aborted' && settings.readAloud !== 'off' && speechAvailable()}
+						<button class="btn small" onclick={() => speak(endText())}
+							><Icon name="speaker" /> Vorlesen</button
+						>
+					{/if}
 					<div class="row center-row">
 						<button class="btn btn-primary big" onclick={again} disabled={busy}
-							>Nochmal fahren</button
+							>{view.status === 'failed' || lostToClock ? 'Neu starten' : 'Nochmal fahren'}</button
 						>
 						<a class="btn big" href="/ueben">Zur Übersicht</a>
 					</div>
@@ -499,6 +596,14 @@
 	.set {
 		font-weight: 700;
 	}
+	.mode-chip {
+		background: #fff3d6;
+		color: #7a4d00;
+		font-weight: 700;
+		font-size: 0.9rem;
+		padding: 0.1rem 0.7rem;
+		border-radius: 999px;
+	}
 	.sr-progress {
 		color: var(--color-muted);
 		font-size: 1rem;
@@ -520,9 +625,67 @@
 		}
 	}
 	.track-wrap {
+		position: relative;
 		background: #fff;
 		border-radius: var(--radius);
 		padding: var(--space-2);
+	}
+	.lead {
+		margin: 0;
+		text-align: center;
+		font-weight: 700;
+		color: #23446e;
+	}
+	.lead.me {
+		color: #1d6b3d;
+	}
+	.trophy-pop {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+		animation: pop 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) 1s both;
+	}
+	.trophy-glow {
+		width: clamp(3.5rem, 16%, 7rem);
+		padding: 0.6rem;
+		border-radius: 50%;
+		background: radial-gradient(circle, #fffbe6 0%, #fffbe6cc 55%, #fffbe600 100%);
+		filter: drop-shadow(0 4px 8px #0004);
+	}
+	@keyframes pop {
+		from {
+			opacity: 0;
+			transform: scale(0.2) translateY(2rem) rotate(-12deg);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	.calm .trophy-pop {
+		animation: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.trophy-pop {
+			animation: none;
+		}
+	}
+	.won {
+		display: flex;
+		justify-content: center;
+	}
+	.lost-text {
+		margin: 0;
+		font-size: 1.5em;
+		font-weight: 700;
+		line-height: 1.4;
+		max-width: 28rem;
+	}
+	.won-text {
+		margin: 0;
 	}
 	.legend {
 		display: flex;

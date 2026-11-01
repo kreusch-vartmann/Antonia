@@ -3,6 +3,7 @@ import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import type { Kv } from '../kv/types';
 import { resolveSettings, type Settings } from '#lib/domain/settings.ts';
+import { TROPHY_FOR_MODE, type RunMode } from '#lib/domain/modes.ts';
 import {
 	abort,
 	answer,
@@ -21,7 +22,7 @@ import { randomSeed } from '#lib/domain/random.ts';
 import { activeAssignmentsForChild } from './sets';
 import { ValidationError } from './accounts';
 
-const { assignment, taskSet, student, run, answerEvent } = schema;
+const { assignment, taskSet, student, run, answerEvent, trophy } = schema;
 
 const RUN_TTL = 24 * 60 * 60;
 
@@ -42,6 +43,7 @@ export type ClientSettings = Pick<
 	| 'opponent'
 	| 'pacerSecondsPerTask'
 	| 'runTimeLimit'
+	| 'targetTime'
 	| 'showTimer'
 	| 'onWrong'
 >;
@@ -54,7 +56,7 @@ export interface RunPayload {
 }
 
 const runKey = (id: string) => `run:${id}`;
-const activeKey = (assignmentId: string) => `activerun:${assignmentId}`;
+const activeKey = (assignmentId: string, mode: RunMode) => `activerun:${assignmentId}:${mode}`;
 
 // Serialise actions per run within this process (double taps etc.).
 const locks = new Map<string, Promise<unknown>>();
@@ -81,6 +83,7 @@ function clientSettings(s: Settings): ClientSettings {
 		opponent: s.opponent,
 		pacerSecondsPerTask: s.pacerSecondsPerTask,
 		runTimeLimit: s.runTimeLimit,
+		targetTime: s.targetTime,
 		showTimer: s.showTimer,
 		onWrong: s.onWrong
 	};
@@ -115,19 +118,23 @@ async function payload(db: Db, s: StoredRun, now: number): Promise<RunPayload> {
 	};
 }
 
-/** Starts a run (or resumes the running one) for an active assignment of the child. */
+/**
+ * Starts a run (or resumes the running one of the same mode) for an active
+ * assignment of the child.
+ */
 export async function startOrResumeRun(
 	db: Db,
 	kv: Kv,
 	studentId: string,
 	assignmentId: string,
+	mode: RunMode = 'normal',
 	now = Date.now()
 ): Promise<RunPayload> {
 	const active = await activeAssignmentsForChild(db, studentId);
 	if (!active.some((a) => a.id === assignmentId))
 		throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
 
-	const existingId = await kv.get(activeKey(assignmentId));
+	const existingId = await kv.get(activeKey(assignmentId, mode));
 	if (existingId) {
 		const s = await load(kv, existingId);
 		if (s && s.studentId === studentId && s.engine.status === 'running') {
@@ -157,6 +164,8 @@ export async function startOrResumeRun(
 		student: row.studentSettings,
 		assignment: row.assignment.settings
 	}).values;
+	if (mode === 'time' && runLevel.targetTime <= 0)
+		throw new ValidationError('Für dieses Rennen ist keine Zielzeit eingestellt.');
 	const tasks = items.map(({ item, task }) => ({
 		id: task.id,
 		content: task.content,
@@ -171,7 +180,7 @@ export async function startOrResumeRun(
 		)
 	}));
 
-	const engine = createRun({ tasks, settings: runLevel, seed: randomSeed(), now });
+	const engine = createRun({ tasks, settings: runLevel, seed: randomSeed(), now, mode });
 	const [r] = await db
 		.insert(run)
 		.values({
@@ -179,14 +188,15 @@ export async function startOrResumeRun(
 			studentId,
 			setId: row.set.id,
 			status: 'running',
+			mode,
 			startedAt: new Date(now),
 			tasksTotal: engine.uniqueTasks,
-			settings: runLevel as unknown as Record<string, unknown>
+			settings: engine.settings as unknown as Record<string, unknown>
 		})
 		.returning({ id: run.id });
 	const stored: StoredRun = { runId: r.id, studentId, assignmentId, setId: row.set.id, engine };
 	await save(kv, stored);
-	await kv.set(activeKey(assignmentId), r.id, RUN_TTL);
+	await kv.set(activeKey(assignmentId, mode), r.id, RUN_TTL);
 	return payload(db, stored, now);
 }
 
@@ -212,6 +222,27 @@ async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) 
 	);
 }
 
+async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
+	const mode = s.engine.mode ?? 'normal';
+	const [set] = await db
+		.select({ name: taskSet.name })
+		.from(taskSet)
+		.where(eq(taskSet.id, s.setId));
+	await db
+		.insert(trophy)
+		.values({
+			studentId: s.studentId,
+			runId: s.runId,
+			kind: TROPHY_FOR_MODE[mode],
+			mode,
+			setName: set?.name ?? '',
+			durationMs,
+			targetMs: mode === 'time' ? s.engine.settings.targetTime * 1000 : null,
+			earnedAt: new Date(s.engine.finishedAt ?? Date.now())
+		})
+		.onConflictDoNothing();
+}
+
 async function persistEnd(db: Db, kv: Kv, s: StoredRun) {
 	const res = result(s.engine);
 	await db
@@ -226,7 +257,8 @@ async function persistEnd(db: Db, kv: Kv, s: StoredRun) {
 			timeline: s.engine.timeline
 		})
 		.where(eq(run.id, s.runId));
-	await kv.del(activeKey(s.assignmentId));
+	if (s.engine.status === 'finished') await awardTrophy(db, s, res?.durationMs ?? null);
+	await kv.del(activeKey(s.assignmentId, s.engine.mode ?? 'normal'));
 	await save(kv, s); // keep result viewable for a while
 }
 

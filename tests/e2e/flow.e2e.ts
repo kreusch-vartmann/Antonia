@@ -98,7 +98,7 @@ test('child races and finishes', async ({ page }) => {
 	if (shots) await page.screenshot({ path: `${shots}/04-kid-home.png`, fullPage: true });
 	await a11y(page);
 
-	await page.getByRole('link', { name: /Einmaleins 5er-Reihe/ }).click();
+	await page.getByRole('link', { name: 'Einmaleins 5er-Reihe – Normal' }).click();
 	await expect(page.getByText('1 · 5 =')).toBeVisible();
 
 	// wrong answer → hint (Boxenstopp)
@@ -124,6 +124,14 @@ test('child races and finishes', async ({ page }) => {
 	await expect(page.getByText('Geschafft!')).toBeVisible();
 	if (shots) await page.screenshot({ path: `${shots}/07-finish.png` });
 	await expect(page.getByLabel('2 von 3 Sternen')).toBeVisible();
+	await expect(page.getByText('bronzenen Pokal')).toBeVisible();
+
+	// the trophy is in the display case, with the name of the set
+	await page.getByRole('link', { name: 'Zur Vitrine' }).click();
+	await expect(page.getByRole('heading', { name: 'Deine Vitrine' })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Bronzener Pokal' })).toBeVisible();
+	await expect(page.getByText('Einmaleins 5er-Reihe')).toBeVisible();
+	await a11y(page);
 });
 
 test('teacher sees the evaluation', async ({ page }) => {

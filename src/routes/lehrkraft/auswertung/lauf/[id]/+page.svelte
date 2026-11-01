@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MODE_LABEL } from '#lib/domain/modes.ts';
 	import { ERROR_PATTERN_LABELS } from '#lib/domain/formats/arithmetic.ts';
 	import { SETTING_META, formatSettingValue, type SettingKey } from '#lib/domain/settings.ts';
 	import { dateTime, duration, RUN_STATUS, seconds, stars } from '#lib/format.ts';
@@ -16,9 +17,9 @@
 <p><a href="/lehrkraft/kinder/{data.studentId}/auswertung">← Auswertung {data.studentName}</a></p>
 <h1>{data.setName} – {data.studentName}</h1>
 <p>
-	{dateTime(r.startedAt)} · {RUN_STATUS[r.status] ?? r.status} · Dauer {duration(r.durationMs)} · {stars(
-		r.stars
-	)} ·
+	{dateTime(r.startedAt)} · {MODE_LABEL[r.mode]} · {RUN_STATUS[r.status] ?? r.status} · Dauer {duration(
+		r.durationMs
+	)} · {stars(r.stars)} ·
 	{r.firstTryCorrect} von {r.tasksTotal} sofort richtig
 </p>
 

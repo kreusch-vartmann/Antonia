@@ -28,6 +28,8 @@ export const settingsSchema = z.object({
 	onTimeout: z.enum(['retryLater', 'wrong']),
 	/** Time limit for the whole run in seconds (0 = off). */
 	runTimeLimit: z.number().int().min(0).max(7200),
+	/** Target time in seconds for the race against the clock (0 = not offered). */
+	targetTime: z.number().int().min(0).max(7200),
 	/** Show the remaining time (fuel gauge). */
 	showTimer: z.boolean(),
 	/** Opponent in the race. */
@@ -64,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	taskTimeLimit: 0,
 	onTimeout: 'retryLater',
 	runTimeLimit: 0,
+	targetTime: 0,
 	showTimer: true,
 	opponent: 'none',
 	pacerSecondsPerTask: 15,
@@ -257,6 +260,15 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 	runTimeLimit: {
 		label: 'Zeit für das ganze Rennen',
 		help: '0 = aus',
+		type: 'number',
+		min: 0,
+		max: 7200,
+		unit: 's',
+		group: 'Zeit'
+	},
+	targetTime: {
+		label: 'Zielzeit für das Zeitrennen',
+		help: 'Das Zeit-Auto erreicht das Ziel genau nach dieser Zeit. 0 = Zeitrennen wird nicht angeboten.',
 		type: 'number',
 		min: 0,
 		max: 7200,

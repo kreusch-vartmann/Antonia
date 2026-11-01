@@ -6,6 +6,9 @@
 		color: string;
 		lane: number; // -1 inner, 0 middle, 1 outer
 		ghost?: boolean;
+		broken?: boolean;
+		/** Size factor (default 0.85). */
+		scale?: number;
 	}
 </script>
 
@@ -89,8 +92,11 @@
 	</g>
 	{#each cars as car (car.id)}
 		{@const pos = place(car.fraction, car.lane)}
-		<g transform="translate({pos.x} {pos.y}) rotate({pos.a}) scale(0.85)" class="car">
-			<RaceCar inline model={car.model} color={car.color} ghost={car.ghost} />
+		<g
+			transform="translate({pos.x} {pos.y}) rotate({pos.a}) scale({car.scale ?? 0.85})"
+			class="car"
+		>
+			<RaceCar inline model={car.model} color={car.color} ghost={car.ghost} broken={car.broken} />
 		</g>
 	{/each}
 </svg>
@@ -107,5 +113,8 @@
 	}
 	.calm .car {
 		transition: none;
+	}
+	.calm :global(.puff) {
+		animation: none;
 	}
 </style>

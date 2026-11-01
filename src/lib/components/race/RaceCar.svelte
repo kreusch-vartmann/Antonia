@@ -10,6 +10,8 @@
 		label?: string;
 		/** Render as <g> inside another SVG (car centred at 0,0, 100 units long). */
 		inline?: boolean;
+		/** Engine failure: smoke over the bonnet. */
+		broken?: boolean;
 	}
 
 	let {
@@ -18,7 +20,8 @@
 		size = 80,
 		ghost = false,
 		label,
-		inline = false
+		inline = false,
+		broken = false
 	}: Props = $props();
 	const fill = $derived(carHex(color));
 </script>
@@ -40,9 +43,22 @@
 {/if}
 
 {#snippet body()}
+	{@render car()}
+	{#if broken}
+		<g class="smoke" fill="#e4e7ea" stroke="#9aa1a8" stroke-width="1.5">
+			<circle class="puff p1" cx="30" cy="-4" r="17" />
+			<circle class="puff p2" cx="42" cy="8" r="13" />
+			<circle class="puff p3" cx="22" cy="12" r="11" />
+		</g>
+	{/if}
+{/snippet}
+
+{#snippet car()}
 	<!-- wheels -->
 	<g fill="#222">
-		{#if model === 'truck'}
+		{#if model === 'monster'}
+			<!-- own wheels below -->
+		{:else if model === 'truck'}
 			<rect x="-38" y="-27" width="16" height="9" rx="3" />
 			<rect x="-38" y="18" width="16" height="9" rx="3" />
 			<rect x="20" y="-27" width="16" height="9" rx="3" />
@@ -54,7 +70,45 @@
 			<rect x="16" y="17" width="16" height="9" rx="3" />
 		{/if}
 	</g>
-	{#if model === 'buggy'}
+	{#if model === 'monster'}
+		<!-- monster truck: huge wheels with tread, a face at the front -->
+		<g fill="#1b1d21" stroke="#00000066" stroke-width="2">
+			<rect x="-44" y="-30" width="28" height="17" rx="6" />
+			<rect x="-44" y="13" width="28" height="17" rx="6" />
+			<rect x="12" y="-30" width="28" height="17" rx="6" />
+			<rect x="12" y="13" width="28" height="17" rx="6" />
+		</g>
+		<g stroke="#5a5f66" stroke-width="2" stroke-linecap="round">
+			{#each [-38, -31, -24, 18, 25, 32] as x (x)}
+				<line x1={x} y1="-27" x2={x} y2="-16" />
+				<line x1={x} y1="16" x2={x} y2="27" />
+			{/each}
+		</g>
+		<rect
+			x="-36"
+			y="-13"
+			width="76"
+			height="26"
+			rx="9"
+			{fill}
+			stroke="#00000066"
+			stroke-width="2"
+		/>
+		<path d="M -34 -4 L -10 -4 L -4 0 L -10 4 L -34 4 Z" fill="#f08a24" />
+		<rect x="-8" y="-10" width="22" height="20" rx="5" fill="#bfe3ff" stroke="#00000055" />
+		<!-- eyes and teeth -->
+		<circle cx="30" cy="-7" r="5.5" fill="#fff" stroke="#000" stroke-width="1" />
+		<circle cx="30" cy="7" r="5.5" fill="#fff" stroke="#000" stroke-width="1" />
+		<circle cx="31.5" cy="-7" r="2.4" fill="#d62828" />
+		<circle cx="31.5" cy="7" r="2.4" fill="#d62828" />
+		<path
+			d="M 41 -10 L 36 -6 L 41 -3 L 36 0 L 41 3 L 36 6 L 41 10"
+			fill="none"
+			stroke="#fff"
+			stroke-width="3"
+			stroke-linejoin="round"
+		/>
+	{:else if model === 'buggy'}
 		<ellipse cx="0" cy="0" rx="40" ry="20" {fill} stroke="#00000055" stroke-width="2" />
 		<ellipse cx="6" cy="0" rx="14" ry="12" fill="#bfe3ff" stroke="#00000044" />
 		<rect x="-30" y="-14" width="14" height="28" rx="4" fill="#00000022" />
@@ -102,5 +156,32 @@
 	}
 	.ghost {
 		opacity: 0.4;
+	}
+	.puff {
+		transform-box: fill-box;
+		transform-origin: center;
+		opacity: 0.8;
+		animation: puff 1.6s ease-out infinite;
+	}
+	.p2 {
+		animation-delay: 0.5s;
+	}
+	.p3 {
+		animation-delay: 1s;
+	}
+	@keyframes puff {
+		from {
+			opacity: 0.85;
+			transform: translate(0, 0) scale(0.9);
+		}
+		to {
+			opacity: 0.1;
+			transform: translate(10px, -20px) scale(1.5);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.puff {
+			animation: none;
+		}
 	}
 </style>

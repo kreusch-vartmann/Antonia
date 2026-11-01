@@ -5,7 +5,7 @@
  * in ./drizzle. Migrations are applied automatically on app start.
  *
  * Privacy: personal data lives only in `teacher` and `student`. Deleting a
- * student cascades to all of their assignments, runs and answers.
+ * student cascades to all of their assignments, runs, answers and trophies.
  */
 import {
 	boolean,
@@ -21,6 +21,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { SettingsLayer } from '#lib/domain/settings.ts';
 import type { TaskContent, TaskOrigin } from '#lib/domain/formats/types.ts';
+import type { RunMode, TrophyKind } from '#lib/domain/modes.ts';
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
@@ -149,7 +150,7 @@ export const assignment = pgTable(
 	(t) => [index('assignment_student_idx').on(t.studentId), index('assignment_set_idx').on(t.setId)]
 );
 
-export type RunStatus = 'running' | 'finished' | 'aborted' | 'timeUp';
+export type RunStatus = 'running' | 'finished' | 'aborted' | 'timeUp' | 'failed';
 
 export const run = pgTable(
 	'run',
@@ -165,6 +166,7 @@ export const run = pgTable(
 			.notNull()
 			.references(() => taskSet.id, { onDelete: 'cascade' }),
 		status: text('status').$type<RunStatus>().notNull().default('running'),
+		mode: text('mode').$type<RunMode>().notNull().default('normal'),
 		startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
 		finishedAt: timestamp('finished_at', { withTimezone: true }),
 		durationMs: integer('duration_ms'),
@@ -180,6 +182,31 @@ export const run = pgTable(
 	(t) => [
 		index('run_student_idx').on(t.studentId, t.startedAt),
 		index('run_assignment_idx').on(t.assignmentId)
+	]
+);
+
+/**
+ * One trophy per successfully finished race. Name and times are snapshots so the
+ * display case stays intact when the set is renamed or deleted.
+ */
+export const trophy = pgTable(
+	'trophy',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		studentId: uuid('student_id')
+			.notNull()
+			.references(() => student.id, { onDelete: 'cascade' }),
+		runId: uuid('run_id').references(() => run.id, { onDelete: 'set null' }),
+		kind: text('kind').$type<TrophyKind>().notNull(),
+		mode: text('mode').$type<RunMode>().notNull(),
+		setName: text('set_name').notNull(),
+		durationMs: integer('duration_ms'),
+		targetMs: integer('target_ms'),
+		earnedAt: timestamp('earned_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		index('trophy_student_idx').on(t.studentId, t.earnedAt),
+		uniqueIndex('trophy_run_uq').on(t.runId)
 	]
 );
 
