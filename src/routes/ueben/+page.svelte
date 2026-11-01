@@ -23,43 +23,39 @@
 		</div>
 	</header>
 
-	{#if data.assignments.length === 0}
+	{#if data.races.length === 0}
 		<p class="empty">
 			Gerade gibt es keine Aufgaben für dich. Frag deine Lehrerin oder deinen Lehrer.
 		</p>
 	{:else}
 		<h2>Deine Rennen</h2>
 		<ul class="cards">
-			{#each data.assignments as a (a.id)}
-				{@const modes = a.modes}
+			{#each data.races as r (r.setId)}
 				<li class="race-card">
-					<span class="title">{a.setName}</span>
-					{#if a.description}<span class="desc">{a.description}</span>{/if}
+					<span class="title">{r.setName}</span>
+					{#if r.description}<span class="desc">{r.description}</span>{/if}
 					<span class="meta">
-						{a.items} Aufgaben
-						{#if a.endsOn}· bis {date(a.endsOn)}{/if}
+						{r.items} Aufgaben
+						{#if r.endsOn}· bis {date(r.endsOn)}{/if}
 					</span>
-					<span class="stars" aria-label="Beste Fahrt: {a.bestStars ?? 0} Sterne">
-						{#each [1, 2, 3] as n (n)}<span class:on={n <= (a.bestStars ?? 0)}>★</span>{/each}
-					</span>
-					{#if modes.length === 0}
-						<p class="muted">Dieses Rennen ist gerade nicht freigegeben.</p>
-					{/if}
 					<div class="modes">
-						{#each modes as m (m)}
+						{#each r.variants as v (v.assignmentId + v.mode)}
+							{@const label = `${MODE_LABEL[v.mode]}${v.mode === 'time' ? ` · ${clock(v.targetTime * 1000)}` : ''}`}
 							<a
-								class="mode {TROPHY_FOR_MODE[m]}"
-								href="/ueben/rennen/{a.id}?mode={m}"
-								aria-label="{a.setName} – {MODE_LABEL[m]}{m === 'time'
-									? `, Ziel ${clock(a.targetTime * 1000)}`
-									: ''}"
+								class="mode {TROPHY_FOR_MODE[v.mode]}"
+								href="/ueben/rennen/{v.assignmentId}?mode={v.mode}"
+								aria-label="{r.setName} – {label}, {v.stars} Sterne"
 							>
-								<span class="cup"><Trophy kind={TROPHY_FOR_MODE[m]} /></span>
+								<span class="cup"><Trophy kind={TROPHY_FOR_MODE[v.mode]} /></span>
 								<span class="mode-text">
-									<strong
-										>{MODE_LABEL[m]}{m === 'time' ? ` · ${clock(a.targetTime * 1000)}` : ''}</strong
-									>
-									<small>{MODE_HELP[m]}</small>
+									<strong>{label}</strong>
+									<small>
+										{MODE_HELP[v.mode]}
+										{#if v.endsOn}· bis {date(v.endsOn)}{/if}
+									</small>
+								</span>
+								<span class="stars" aria-hidden="true">
+									{#each [1, 2, 3] as n (n)}<span class:on={n <= v.stars}>★</span>{/each}
 								</span>
 							</a>
 						{/each}
@@ -105,7 +101,6 @@
 		border-radius: 1.2rem;
 		border: 3px solid #d9e4d2;
 		color: var(--color-text);
-		min-height: 12rem;
 	}
 	.modes {
 		display: flex;
@@ -159,7 +154,10 @@
 		color: var(--color-muted);
 	}
 	.stars {
-		font-size: 2rem;
+		flex: none;
+		margin-left: auto;
+		font-size: 1.4rem;
+		white-space: nowrap;
 		color: #d8d8d8;
 	}
 	.stars .on {

@@ -32,7 +32,10 @@
 			<tbody>
 				{#each data.sets as s (s.id)}
 					<tr>
-						<td><a href="/lehrkraft/sets/{s.id}">{s.name}</a></td>
+						<td>
+							<a href="/lehrkraft/sets/{s.id}">{s.name}</a>
+							{#if s.description}<div class="muted">{s.description}</div>{/if}
+						</td>
 						<td>Autorennen</td>
 						<td class="num">{s.items}</td>
 						<td class="num">{s.assignments}</td>

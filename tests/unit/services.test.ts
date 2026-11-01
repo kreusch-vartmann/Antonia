@@ -22,6 +22,7 @@ import {
 	activeAssignmentsForChild,
 	listAssignmentsForSet,
 	listAssignmentsForStudent,
+	groupRaces,
 	listSets,
 	updateAssignment
 } from '#lib/server/services/sets.ts';
@@ -450,6 +451,36 @@ describe('race modes and trophies', () => {
 		await expect(assign(db, t, { setId, studentIds: [s], modes: [] })).rejects.toBeInstanceOf(
 			ValidationError
 		);
+	});
+
+	it('groups several assignments of one set into one race with its variants', async () => {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const ids = await createTasks(
+			db,
+			t,
+			generateMultiplicationRow({ row: 5, from: 1, to: 2 }).map((d) => ({
+				content: d.content,
+				tags: d.tags,
+				origin: d.origin
+			}))
+		);
+		const setId = await createSet(db, t, { name: 'Set', description: 'Beschr', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s], settings: { targetTime: 120 } });
+		await assign(db, t, { setId, studentIds: [s], settings: { targetTime: 60 } });
+		const groups = groupRaces(await activeAssignmentsForChild(db, s));
+		expect(groups).toHaveLength(1);
+		expect(groups[0]).toMatchObject({ setName: 'Set', description: 'Beschr' });
+		expect(groups[0].variants.map((v) => [v.mode, v.targetTime])).toEqual([
+			['normal', 0],
+			['flawless', 0],
+			['time', 60],
+			['time', 120]
+		]);
 	});
 
 	it('ghost car: the best finished run of the assignment drives along, in every mode but the time race', async () => {

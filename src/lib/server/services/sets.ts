@@ -355,6 +355,7 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			setSettings: taskSet.settings,
 			assignmentSettings: assignment.settings,
 			studentSettings: student.settings,
+			setId: taskSet.id,
 			setName: taskSet.name,
 			description: taskSet.description,
 			endsOn: assignment.endsOn,
@@ -377,6 +378,28 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			)
 		)
 		.orderBy(asc(assignment.endsOn), desc(assignment.createdAt));
+	const starRows = rows.length
+		? await db
+				.select({
+					assignmentId: schema.run.assignmentId,
+					mode: schema.run.mode,
+					stars: sql<number | null>`max(${schema.run.stars})`
+				})
+				.from(schema.run)
+				.where(
+					inArray(
+						schema.run.assignmentId,
+						rows.map((r) => r.id)
+					)
+				)
+				.groupBy(schema.run.assignmentId, schema.run.mode)
+		: [];
+	const starsFor = (id: string): Partial<Record<RunMode, number>> =>
+		Object.fromEntries(
+			starRows
+				.filter((r) => r.assignmentId === id && r.stars !== null)
+				.map((r) => [r.mode, r.stars])
+		);
 	return rows.map(({ setSettings, assignmentSettings, studentSettings, allowedModes, ...a }) => {
 		const targetTime = resolveSettings({
 			set: setSettings,
@@ -385,10 +408,79 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 		}).values.targetTime;
 		return {
 			...a,
+			/** Best star rating per race mode of this assignment. */
+			starsByMode: starsFor(a.id),
 			/** Target time in seconds for the race against the clock (0 = not offered). */
 			targetTime,
 			/** Modes the child may choose: allowed by the teacher, and the time race needs a target. */
 			modes: cleanModes(allowedModes).filter((m) => m !== 'time' || targetTime > 0)
 		};
 	});
+}
+
+export type RaceVariant = {
+	assignmentId: string;
+	mode: RunMode;
+	/** Target time in seconds (only meaningful for the time race). */
+	targetTime: number;
+	endsOn: string | null;
+	stars: number;
+};
+
+export type RaceGroup = {
+	setId: string;
+	setName: string;
+	description: string | null;
+	items: number;
+	endsOn: string | null;
+	variants: RaceVariant[];
+};
+
+/**
+ * Merges all active assignments of the same set into one entry with its race
+ * variants (normal, flawless, one time race per target time). Identical variants
+ * from several assignments appear once and show the best stars of all of them.
+ */
+export function groupRaces(assignments: Awaited<ReturnType<typeof activeAssignmentsForChild>>) {
+	const groups = new Map<string, RaceGroup>();
+	for (const a of assignments) {
+		let g = groups.get(a.setId);
+		if (!g) {
+			g = {
+				setId: a.setId,
+				setName: a.setName,
+				description: a.description,
+				items: a.items,
+				endsOn: null,
+				variants: []
+			};
+			groups.set(a.setId, g);
+		}
+		for (const mode of a.modes) {
+			const targetTime = mode === 'time' ? a.targetTime : 0;
+			const stars = a.starsByMode[mode] ?? 0;
+			const same = g.variants.find((v) => v.mode === mode && v.targetTime === targetTime);
+			if (same) {
+				same.stars = Math.max(same.stars, stars);
+				if (same.endsOn && a.endsOn && a.endsOn > same.endsOn) same.endsOn = a.endsOn;
+				if (!a.endsOn) same.endsOn = null;
+			} else {
+				g.variants.push({ assignmentId: a.id, mode, targetTime, endsOn: a.endsOn, stars });
+			}
+		}
+	}
+	return [...groups.values()]
+		.map((g) => {
+			g.variants.sort(
+				(x, y) =>
+					RUN_MODES.indexOf(x.mode) - RUN_MODES.indexOf(y.mode) || x.targetTime - y.targetTime
+			);
+			const ends = new Set(g.variants.map((v) => v.endsOn));
+			if (ends.size === 1) {
+				g.endsOn = g.variants[0].endsOn;
+				for (const v of g.variants) v.endsOn = null;
+			}
+			return g;
+		})
+		.filter((g) => g.variants.length > 0);
 }
