@@ -82,10 +82,12 @@ Der Container läuft als Nicht-root-Benutzer.
    optional mit Zeitraum). Bei jeder Zuweisung legt die Lehrkraft fest, welche
    **Rennarten** das Kind mit diesem Set fahren darf (Normal, Fehlerfrei, Gegen die Zeit).
    „Gegen die Zeit“ erscheint nur mit eingetragener Zielzeit.
+   „Bestzeit jagen“ (nur zusammen mit „Fehlerfrei“) ist eine fehlerfreie Fahrt gegen die eigene
+   Bestzeit mit Geisterauto; sie ist für das Kind gesperrt, bis es „Fehlerfrei“ einmal geschafft hat.
 4. **Einstellungen** hat jede Einstellung an genau einem Ort: Was das Kind braucht
    (Vorlesen, Töne, Antwortformat, Nachteilsausgleich bei Zeitlimits) steht beim **Kind**.
    Was geübt wird (Reihenfolge, Hilfen, Zeit pro Aufgabe) steht beim **Aufgabenset**.
-   Was das Kind jetzt tun soll (Rennarten, Zielzeit, Geister-Auto) steht in der **Zuweisung**.
+   Was das Kind jetzt tun soll (Rennarten, Zielzeit) steht in der **Zuweisung**.
    Jede Maske zeigt bei „Voreinstellung“, welcher Wert gilt und woher er kommt.
 5. Kinder melden sich an, wählen in der **Garage** ihr Auto und fahren das **Rennen**.
 6. **Auswertung**: Übersicht, Lernstand je Kind (Aufgabenarten, Fehlermuster,

@@ -10,7 +10,7 @@
  * (what is practised) and assignment (what the child should do now). Values
  * stored in other layers are ignored, so no hidden overrides exist.
  *
- * Run-level settings (target time, ghost, …) ignore the task layers.
+ * Run-level settings (target time, …) ignore the task layers.
  */
 import { z } from 'zod';
 
@@ -33,8 +33,6 @@ export const settingsSchema = z.object({
 	targetTime: z.number().int().min(0).max(7200),
 	/** Show the remaining time (fuel gauge). */
 	showTimer: z.boolean(),
-	/** The child's best run drives along as a ghost car. */
-	ghost: z.boolean(),
 	/** Task order within the run. */
 	order: z.enum(['fixed', 'shuffle']),
 	/** Max tasks per run (0 = all tasks of the set). */
@@ -65,7 +63,6 @@ export const DEFAULT_SETTINGS: Settings = {
 	onTimeout: 'retryLater',
 	targetTime: 0,
 	showTimer: true,
-	ghost: false,
 	order: 'fixed',
 	tasksPerRun: 0,
 	readAloud: 'button',
@@ -299,13 +296,6 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		unit: 's',
 		group: 'Rennen',
 		levels: ['assignment']
-	},
-	ghost: {
-		label: 'Geister-Auto (die eigene Bestzeit fährt mit)',
-		help: 'Fährt ab der zweiten erfolgreichen Fahrt mit diesem Set mit (schnellste bisherige Fahrt, jede Rennart außer „Gegen die Zeit“).',
-		type: 'boolean',
-		group: 'Rennen',
-		levels: ['student', 'assignment']
 	},
 	readAloud: {
 		label: 'Vorlesen',

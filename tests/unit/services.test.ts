@@ -303,7 +303,7 @@ describe('race modes and trophies', () => {
 	it('time race is not available without a target time', async () => {
 		const { s, a } = await fixture();
 		expect(a.targetTime).toBe(0);
-		expect(a.modes).toEqual(['normal', 'flawless']);
+		expect(a.modes).toEqual(['normal', 'flawless', 'record']);
 		await expect(startOrResumeRun(db, kv, s, a.id, 'time', Date.now())).rejects.toBeInstanceOf(
 			ValidationError
 		);
@@ -314,7 +314,7 @@ describe('race modes and trophies', () => {
 		expect(a.targetTime).toBe(60);
 		const T = Date.now();
 		const start = await startOrResumeRun(db, kv, s, a.id, 'time', T);
-		expect(start.settings).toMatchObject({ targetTime: 60, ghost: false });
+		expect(start.settings).toMatchObject({ targetTime: 60 });
 
 		// too slow: no trophy
 		const late = await act(db, kv, s, start.runId, { type: 'tick' }, T + 61_000);
@@ -396,7 +396,7 @@ describe('race modes and trophies', () => {
 
 	it('the teacher decides which race modes the child may use', async () => {
 		const { t, s, a } = await fixture({ targetTime: 600 });
-		expect(a.modes).toEqual(['normal', 'flawless', 'time']);
+		expect(a.modes).toEqual(['normal', 'flawless', 'record', 'time']);
 
 		await updateAssignment(db, t, a.id, { modes: ['flawless'], settings: { targetTime: 600 } });
 		const [only] = await activeAssignmentsForChild(db, s);
@@ -478,29 +478,71 @@ describe('race modes and trophies', () => {
 		expect(groups[0].variants.map((v) => [v.mode, v.targetTime])).toEqual([
 			['normal', 0],
 			['flawless', 0],
+			['record', 0],
 			['time', 60],
 			['time', 120]
 		]);
 	});
 
-	it('ghost car: the best finished run of the assignment drives along, in every mode but the time race', async () => {
-		const { s, a } = await fixture({ ghost: true, targetTime: 600 });
+	it('race against the best time: locked until a flawless race was finished, then the ghost drives along', async () => {
+		const { t, s, a } = await fixture({ targetTime: 600 });
+		await updateAssignment(db, t, a.id, {
+			modes: ['normal', 'flawless', 'record', 'time'],
+			settings: { targetTime: 600 }
+		});
 		const T = Date.now();
-		const first = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
-		expect(first.settings.ghost).toBe(true);
-		expect(first.ghost).toBeNull(); // no earlier run yet
-		let p = first;
-		let n = 0;
-		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 1000 * ++n);
-		expect(p.view.status).toBe('finished');
 
-		for (const mode of ['normal', 'flawless'] as const) {
-			const next = await startOrResumeRun(db, kv, s, a.id, mode, T + 100_000);
-			expect(next.ghost, mode).not.toBeNull();
-			expect(next.ghost!.at(-1)![1]).toBe(1);
-		}
-		const time = await startOrResumeRun(db, kv, s, a.id, 'time', T + 100_000);
-		expect(time.settings.ghost).toBe(false);
+		// no reference yet
+		expect((await activeAssignmentsForChild(db, s))[0].best).toBeNull();
+		await expect(startOrResumeRun(db, kv, s, a.id, 'record', T)).rejects.toBeInstanceOf(
+			ValidationError
+		);
+
+		// a normal race is no reference
+		await drive(s, a.id, 'normal', T);
+		expect((await activeAssignmentsForChild(db, s))[0].best).toBeNull();
+
+		// the first flawless race creates it
+		const first = await drive(s, a.id, 'flawless', T + 10_000);
+		expect(first.view.status).toBe('finished');
+		expect(first.best).toBeNull(); // nothing earlier to compare with
+		const [after] = await activeAssignmentsForChild(db, s);
+		expect(after.best).toMatchObject({ durationMs: first.view.result!.durationMs });
+		expect(groupRaces([after])[0].variants.find((v) => v.mode === 'record')!.best).not.toBeNull();
+
+		// the race against the best time shows the ghost and the reference; no trophy is awarded
+		const start = await startOrResumeRun(db, kv, s, a.id, 'record', T + 100_000);
+		expect(start.ghost!.at(-1)![1]).toBe(1);
+		expect(start.best!.durationMs).toBe(first.view.result!.durationMs);
+		expect(start.settings).not.toHaveProperty('ghost');
+		let p = start;
+		let n = 0;
+		// faster than the reference: 100 ms per answer
+		while (p.view.status === 'running') p = await answerCurrent(s, p, T + 100_000 + 100 * ++n);
+		expect(p.view.status).toBe('finished');
+		expect(p.view.result!.durationMs).toBeLessThan(start.best!.durationMs);
+		expect(p.best!.durationMs).toBe(start.best!.durationMs); // still the earlier reference
+		expect((await listTrophies(db, s)).map((x) => x.mode).sort()).toEqual(['flawless', 'normal']);
+		expect((await activeAssignmentsForChild(db, s))[0].best!.durationMs).toBe(
+			p.view.result!.durationMs
+		);
+
+		// a mistake ends the race (engine failure)
+		const fail = await startOrResumeRun(db, kv, s, a.id, 'record', T + 200_000);
+		const bad = await answerCurrent(s, fail, T + 201_000, true);
+		expect(bad.view.status).toBe('failed');
+
+		// the time race has no ghost
+		const time = await startOrResumeRun(db, kv, s, a.id, 'time', T + 300_000);
 		expect(time.ghost).toBeNull();
+		expect(time.best).toBeNull();
+	});
+
+	it('"Bestzeit jagen" can only be assigned together with "Fehlerfrei"', async () => {
+		const { t, a } = await fixture();
+		await expect(
+			updateAssignment(db, t, a.id, { modes: ['normal', 'record'] })
+		).rejects.toBeInstanceOf(ValidationError);
+		await updateAssignment(db, t, a.id, { modes: ['flawless', 'record'] });
 	});
 });

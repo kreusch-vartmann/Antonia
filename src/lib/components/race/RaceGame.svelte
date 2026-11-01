@@ -7,14 +7,17 @@
 	import HintVisual from './HintVisual.svelte';
 	import Icon from '../Icon.svelte';
 	import Trophy from '../Trophy.svelte';
+	import Confetti from '../Confetti.svelte';
+	import Stopwatch from '../Stopwatch.svelte';
 	import {
 		CLOCK_OPPONENT,
 		FAILED_TEXT,
 		MODE_LABEL,
 		TIME_LOST_TEXT,
-		TROPHY_FOR_MODE,
 		TROPHY_WON,
-		clock
+		clock,
+		clockPrecise,
+		trophyFor
 	} from '#lib/domain/modes.ts';
 	import { speak, speechBroken, stopSpeaking } from '#lib/client/speech.ts';
 	import { sounds } from '#lib/client/sound.ts';
@@ -46,7 +49,15 @@
 	const calm = $derived(settings.calm);
 	const mode = $derived(view.mode);
 	const lostToClock = $derived(mode === 'time' && view.status === 'timeUp');
-	const trophyKind = $derived(view.status === 'finished' ? TROPHY_FOR_MODE[mode] : null);
+	const trophyKind = $derived(view.status === 'finished' ? trophyFor(mode) : null);
+	const best = $derived(payload.best);
+	const newRecord = $derived(
+		mode === 'record' &&
+			view.status === 'finished' &&
+			!!view.result &&
+			!!best &&
+			view.result.durationMs < best.durationMs
+	);
 
 	// Timing (client clock relative to server snapshot)
 	let receivedAt = $state(performance.now());
@@ -100,7 +111,7 @@
 
 	const cars = $derived.by(() => {
 		const list: TrackCar[] = [];
-		if (settings.ghost && payload.ghost) {
+		if (mode === 'record' && payload.ghost) {
 			list.push({
 				id: 'ghost',
 				fraction: ghostAt(runElapsed),
@@ -314,11 +325,15 @@
 		if (lostToClock) return TIME_LOST_TEXT;
 		if (payload.view.status === 'timeUp')
 			return `Die Zeit ist um! Du hast ${r.done} Aufgaben geschafft.`;
+		if (mode === 'record' && best) {
+			return newRecord
+				? `Neue Bestzeit! ${clockPrecise(r.durationMs)}. Vorher waren es ${clockPrecise(best.durationMs)}.`
+				: `Geschafft! Deine Zeit war ${clockPrecise(r.durationMs)}. Deine Bestzeit ist ${clockPrecise(best.durationMs)}. Beim nächsten Mal klappt es bestimmt.`;
+		}
 		const prize = trophyKind ? ` Du hast einen ${TROPHY_WON[trophyKind]} gewonnen!` : '';
 		return `Geschafft! Du bist im Ziel.${prize} ${r.firstTry} von ${r.tasks} Aufgaben waren sofort richtig.`;
 	}
 
-	const ghostDuration = $derived(payload.ghost?.at(-1)?.[0] ?? null);
 	const keypad = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 </script>
 
@@ -356,12 +371,12 @@
 			{/if}
 			<div class="legend">
 				<span class="me"><RaceCar model={car.model} color={car.color} size={34} /> {name}</span>
-				{#if settings.ghost && payload.ghost}
-					<span><RaceCar model={car.model} color={car.color} size={34} ghost /> deine Bestzeit</span
+				{#if mode === 'record' && payload.ghost && best}
+					<span
+						><RaceCar model={car.model} color={car.color} size={34} ghost /> deine Bestzeit ({clockPrecise(
+							best.durationMs
+						)})</span
 					>
-				{/if}
-				{#if settings.ghost && !payload.ghost}
-					<span class="muted">Dein Geister-Auto fährt ab der nächsten Fahrt mit.</span>
 				{/if}
 				{#if mode === 'time'}
 					<span
@@ -392,6 +407,24 @@
 						<p>{FAILED_TEXT}</p>
 					{:else if lostToClock}
 						<p class="lost-text">{TIME_LOST_TEXT}</p>
+					{:else if mode === 'record' && view.status === 'finished' && view.result}
+						{#if newRecord && best}
+							{#if !calm}<Confetti />{/if}
+							<Stopwatch ms={view.result.durationMs} />
+							<p class="big-text">Neue Bestzeit!</p>
+							<p>
+								Du warst schneller als deine alte Bestzeit von
+								<strong>{clockPrecise(best.durationMs)}</strong>.
+							</p>
+						{:else}
+							<div class="flag"><Icon name="flag" size={72} /></div>
+							<p class="big-text">Geschafft!</p>
+							<p>
+								Deine Zeit: <strong>{clockPrecise(view.result.durationMs)}</strong>
+								{#if best}(Bestzeit: {clockPrecise(best.durationMs)}){/if}
+							</p>
+							<p>Die Bestzeit hast du diesmal nicht geschlagen. Beim nächsten Mal klappt es!</p>
+						{/if}
 					{:else}
 						{#if trophyKind}
 							<div class="won">
@@ -429,14 +462,11 @@
 								Du hast <strong>{view.result.done}</strong> Aufgaben gerechnet. {view.result
 									.firstTry} davon waren sofort richtig.
 							</p>
-							{#if settings.ghost}
-								{#if ghostDuration === null}
-									<p>Das war deine erste Fahrt – beim nächsten Mal fährt dein Geister-Auto mit!</p>
-								{:else if view.status === 'finished' && view.result.durationMs < ghostDuration}
-									<p><strong>Neue Bestzeit!</strong> Du warst schneller als dein Geister-Auto.</p>
-								{:else}
-									<p>Dein Geister-Auto war diesmal schneller. Beim nächsten Mal holst du es ein!</p>
-								{/if}
+							{#if mode === 'flawless' && view.status === 'finished' && !best}
+								<p>
+									Deine Zeit: <strong>{clockPrecise(view.result.durationMs)}</strong>. Das ist jetzt
+									deine Bestzeit – du kannst sie in „Bestzeit jagen“ schlagen!
+								</p>
 							{/if}
 						{/if}
 					{/if}

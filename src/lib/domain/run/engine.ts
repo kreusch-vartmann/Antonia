@@ -7,7 +7,7 @@
  */
 import { formatOf } from '../formats';
 import type { Hint, Presentation, TaskContent } from '../formats/types';
-import type { RunMode } from '../modes';
+import { isFlawlessMode, type RunMode } from '../modes';
 import { rng, shuffle } from '../random';
 import { TASK_LEVEL_KEYS, type Settings } from '../settings';
 
@@ -142,9 +142,8 @@ export function pickTaskSettings(s: Settings): TaskSettings {
  * Race against the clock: the clock car is the only opponent.
  */
 export function applyMode(settings: Settings, mode: RunMode): Settings {
-	if (mode !== 'time') return settings;
-	if (settings.targetTime <= 0) throw new Error('time race needs a target time');
-	return { ...settings, ghost: false };
+	if (mode === 'time' && settings.targetTime <= 0) throw new Error('time race needs a target time');
+	return settings;
 }
 
 /** Time limit of the whole run in seconds: the target time of the race against the clock. */
@@ -331,7 +330,7 @@ export function answer(
 		return { state, feedback: { outcome: 'correct', afterSolution, firstTry }, events: [event] };
 	}
 
-	if (state.mode === 'flawless') {
+	if (isFlawlessMode(state.mode)) {
 		finish(state, now, 'failed');
 		return { state, feedback: { outcome: 'wrong', failed: true }, events: [event] };
 	}
@@ -365,7 +364,7 @@ export function timeout(state: RunState, input: { key: string }, now: number): S
 	};
 	cur.timeouts += 1;
 	if (def.settings.onTimeout === 'wrong') {
-		if (state.mode === 'flawless') {
+		if (isFlawlessMode(state.mode)) {
 			finish(state, now, 'failed');
 			return { state, feedback: { outcome: 'timeout', failed: true }, events: [event] };
 		}

@@ -21,16 +21,16 @@ describe('settings inheritance', () => {
 	it('more specific layers win: set < student, assignment last', () => {
 		const r = resolveSettings({
 			set: { taskTimeLimit: 10, hintAfter: 2 },
-			student: { taskTimeLimit: 0, readAloud: 'auto', ghost: true },
-			assignment: { ghost: false }
+			student: { taskTimeLimit: 0, readAloud: 'auto' },
+			assignment: { order: 'shuffle' }
 		});
 		expect(r.values.taskTimeLimit).toBe(0);
 		expect(r.sources.taskTimeLimit).toBe('student');
 		expect(r.values.hintAfter).toBe(2);
 		expect(r.sources.hintAfter).toBe('set');
 		expect(r.values.readAloud).toBe('auto');
-		expect(r.values.ghost).toBe(false);
-		expect(r.sources.ghost).toBe('assignment');
+		expect(r.values.order).toBe('shuffle');
+		expect(r.sources.order).toBe('assignment');
 	});
 
 	it('every setting is only effective where it can be edited', () => {
@@ -52,7 +52,7 @@ describe('settings inheritance', () => {
 
 	it('lists the settings of a level', () => {
 		expect(keysForLevel('assignment').sort()).toEqual(
-			['ghost', 'order', 'targetTime', 'tasksPerRun'].sort()
+			['order', 'targetTime', 'tasksPerRun'].sort()
 		);
 		expect(keysForLevel('student')).toContain('readAloud');
 		expect(keysForLevel('set')).not.toContain('readAloud');

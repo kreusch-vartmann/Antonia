@@ -121,6 +121,16 @@ describe('run engine', () => {
 		expect(s.timeline.at(-1)).toEqual([2000, 0.333]);
 	});
 
+	describe('race against the best time', () => {
+		it('is flawless: a single mistake is an engine failure', () => {
+			const s = setup({}, 3, 'record');
+			answer(s, { key: key(s), value: solution(s), ms: 1 }, 100);
+			const r = answer(s, { key: key(s), value: '99', ms: 1 }, 200);
+			expect(r.feedback).toMatchObject({ outcome: 'wrong', failed: true });
+			expect(view(s, 300).status).toBe('failed');
+		});
+	});
+
 	describe('flawless race', () => {
 		it('finishes without mistakes', () => {
 			const s = setup({}, 3, 'flawless');
@@ -168,8 +178,7 @@ describe('run engine', () => {
 		});
 
 		it('is won by reaching the finish in time, mistakes allowed', () => {
-			const s = setup({ targetTime: 60, ghost: true }, 2, 'time');
-			expect(s.settings).toMatchObject({ targetTime: 60, ghost: false });
+			const s = setup({ targetTime: 60 }, 2, 'time');
 			answer(s, { key: key(s), value: '99', ms: 1 }, 1000);
 			answer(s, { key: key(s), value: solution(s), ms: 1 }, 2000);
 			answer(s, { key: key(s), value: solution(s), ms: 1 }, 59_000);

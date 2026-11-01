@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { resolveSettings, sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
@@ -179,6 +179,10 @@ function requireModes(values: string[], targetTime: number): RunMode[] {
 	if (modes.length === 0) throw new ValidationError('Bitte mindestens eine Rennart auswählen.');
 	if (modes.includes('time') && targetTime <= 0)
 		throw new ValidationError('Für „Gegen die Zeit“ bitte eine Zielzeit eintragen.');
+	if (modes.includes('record') && !modes.includes('flawless'))
+		throw new ValidationError(
+			'„Bestzeit jagen“ braucht „Fehlerfrei“: Die Bestzeit entsteht in einer fehlerfreien Fahrt.'
+		);
 	return modes;
 }
 
@@ -346,6 +350,54 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 		.orderBy(desc(assignment.createdAt));
 }
 
+export interface BestTime {
+	runId: string;
+	durationMs: number;
+	at: string;
+}
+
+/**
+ * The reference for the race against the best time: the fastest finished flawless run
+ * (modes "Fehlerfrei" and "Bestzeit jagen") of the child per set.
+ */
+export async function bestTimes(
+	db: Db,
+	studentId: string,
+	setIds: string[],
+	excludeRunId?: string
+): Promise<Map<string, BestTime>> {
+	const best = new Map<string, BestTime>();
+	if (setIds.length === 0) return best;
+	const rows = await db
+		.select({
+			runId: schema.run.id,
+			setId: schema.run.setId,
+			durationMs: schema.run.durationMs,
+			finishedAt: schema.run.finishedAt
+		})
+		.from(schema.run)
+		.where(
+			and(
+				eq(schema.run.studentId, studentId),
+				inArray(schema.run.setId, setIds),
+				eq(schema.run.status, 'finished'),
+				inArray(schema.run.mode, ['flawless', 'record']),
+				sql`${schema.run.durationMs} is not null`,
+				excludeRunId ? ne(schema.run.id, excludeRunId) : undefined
+			)
+		)
+		.orderBy(asc(schema.run.durationMs));
+	for (const r of rows) {
+		if (best.has(r.setId) || r.durationMs === null) continue;
+		best.set(r.setId, {
+			runId: r.runId,
+			durationMs: r.durationMs,
+			at: (r.finishedAt ?? new Date()).toISOString()
+		});
+	}
+	return best;
+}
+
 /** Assignments the child can currently work on. */
 export async function activeAssignmentsForChild(db: Db, studentId: string, today = todayBerlin()) {
 	const rows = await db
@@ -400,6 +452,7 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 				.filter((r) => r.assignmentId === id && r.stars !== null)
 				.map((r) => [r.mode, r.stars])
 		);
+	const best = await bestTimes(db, studentId, [...new Set(rows.map((r) => r.setId))]);
 	return rows.map(({ setSettings, assignmentSettings, studentSettings, allowedModes, ...a }) => {
 		const targetTime = resolveSettings({
 			set: setSettings,
@@ -408,6 +461,8 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 		}).values.targetTime;
 		return {
 			...a,
+			/** Reference time for "Bestzeit jagen" (null until a flawless race was finished). */
+			best: best.get(a.setId) ?? null,
 			/** Best star rating per race mode of this assignment. */
 			starsByMode: starsFor(a.id),
 			/** Target time in seconds for the race against the clock (0 = not offered). */
@@ -425,6 +480,8 @@ export type RaceVariant = {
 	targetTime: number;
 	endsOn: string | null;
 	stars: number;
+	/** Best time of the child with this set; shown instead of stars for the race against it. */
+	best: BestTime | null;
 };
 
 export type RaceGroup = {
@@ -465,7 +522,14 @@ export function groupRaces(assignments: Awaited<ReturnType<typeof activeAssignme
 				if (same.endsOn && a.endsOn && a.endsOn > same.endsOn) same.endsOn = a.endsOn;
 				if (!a.endsOn) same.endsOn = null;
 			} else {
-				g.variants.push({ assignmentId: a.id, mode, targetTime, endsOn: a.endsOn, stars });
+				g.variants.push({
+					assignmentId: a.id,
+					mode,
+					targetTime,
+					endsOn: a.endsOn,
+					stars,
+					best: a.best
+				});
 			}
 		}
 	}

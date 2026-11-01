@@ -186,7 +186,7 @@ Umsetzungsnotizen M1:
 - Zeitlimit pro Aufgabe: „später nochmal“ (Standard) oder „als Fehlversuch“; nach zwei
   Zeitabläufen wird die Lösung gezeigt. Zeitlimit pro Rennen beendet mit Teilergebnis.
 - Sterne: 3 ab 90 % sofort richtig, 2 ab 60 %, sonst 1 für das Ankommen.
-- Geister-Auto = schnellste beendete Fahrt derselben Zuweisung.
+- Geister-Auto (nur Rennart „Bestzeit jagen“) = schnellste beendete fehlerfreie Fahrt des Kindes mit demselben Set.
 - „PDF“ = druckoptimierte Ansicht (Browser „Als PDF speichern“), CSV mit Semikolon für
   deutsche Tabellenprogramme, Formel-Injektion wird verhindert.
 

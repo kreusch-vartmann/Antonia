@@ -3,7 +3,7 @@ import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import type { Kv } from '../kv/types';
 import { resolveSettings, type Settings } from '#lib/domain/settings.ts';
-import { TROPHY_FOR_MODE, type RunMode } from '#lib/domain/modes.ts';
+import { isFlawlessMode, trophyFor, type RunMode } from '#lib/domain/modes.ts';
 import {
 	abort,
 	answer,
@@ -19,7 +19,7 @@ import {
 	type RunView
 } from '#lib/domain/run/engine.ts';
 import { randomSeed } from '#lib/domain/random.ts';
-import { activeAssignmentsForChild } from './sets';
+import { activeAssignmentsForChild, bestTimes, type BestTime } from './sets';
 import { ValidationError } from './accounts';
 
 const { assignment, taskSet, student, run, answerEvent, trophy } = schema;
@@ -36,14 +36,17 @@ interface StoredRun {
 
 export type ClientSettings = Pick<
 	Settings,
-	'readAloud' | 'sound' | 'calm' | 'largeText' | 'ghost' | 'targetTime' | 'showTimer'
+	'readAloud' | 'sound' | 'calm' | 'largeText' | 'targetTime' | 'showTimer'
 >;
 
 export interface RunPayload {
 	runId: string;
 	view: RunView;
 	settings: ClientSettings;
+	/** Progress of the best run, for the ghost car (race against the best time only). */
 	ghost: [number, number][] | null;
+	/** Best earlier time with this set (flawless races only), without the run itself. */
+	best: Pick<BestTime, 'durationMs' | 'at'> | null;
 }
 
 const runKey = (id: string) => `run:${id}`;
@@ -71,7 +74,6 @@ function clientSettings(s: Settings): ClientSettings {
 		sound: s.sound,
 		calm: s.calm,
 		largeText: s.largeText,
-		ghost: s.ghost,
 		targetTime: s.targetTime,
 		showTimer: s.showTimer
 	};
@@ -86,23 +88,28 @@ async function save(kv: Kv, s: StoredRun) {
 	await kv.set(runKey(s.runId), JSON.stringify(s), RUN_TTL);
 }
 
-async function ghostFor(db: Db, s: StoredRun): Promise<[number, number][] | null> {
-	if (!s.engine.settings.ghost) return null;
-	const [best] = await db
-		.select({ timeline: run.timeline })
-		.from(run)
-		.where(and(eq(run.assignmentId, s.assignmentId), eq(run.status, 'finished')))
-		.orderBy(asc(run.durationMs))
-		.limit(1);
-	return best?.timeline ?? null;
+async function reference(db: Db, s: StoredRun) {
+	const [best] = (await bestTimes(db, s.studentId, [s.setId], s.runId)).values();
+	return best ?? null;
 }
 
 async function payload(db: Db, s: StoredRun, now: number): Promise<RunPayload> {
+	const flawless = isFlawlessMode(s.engine.mode);
+	const best = flawless ? await reference(db, s) : null;
+	let ghost: [number, number][] | null = null;
+	if (best && s.engine.mode === 'record') {
+		const [row] = await db
+			.select({ timeline: run.timeline })
+			.from(run)
+			.where(eq(run.id, best.runId));
+		ghost = row?.timeline ?? null;
+	}
 	return {
 		runId: s.runId,
 		view: view(s.engine, now),
 		settings: clientSettings(s.engine.settings),
-		ghost: await ghostFor(db, s)
+		ghost,
+		best: best ? { durationMs: best.durationMs, at: best.at } : null
 	};
 }
 
@@ -123,6 +130,10 @@ export async function startOrResumeRun(
 	if (!available) throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
 	if (!available.modes.includes(mode))
 		throw new ValidationError('Diese Rennart ist für dich gerade nicht freigegeben.');
+	if (mode === 'record' && !available.best)
+		throw new ValidationError(
+			'Fahre zuerst einmal „Fehlerfrei“, dann kannst du deine Bestzeit jagen.'
+		);
 
 	const existingId = await kv.get(activeKey(assignmentId, mode));
 	if (existingId) {
@@ -214,6 +225,8 @@ async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) 
 
 async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 	const mode = s.engine.mode ?? 'normal';
+	const kind = trophyFor(mode);
+	if (!kind) return;
 	const [wrong] = await db
 		.select({ n: sql<number>`count(*)::int` })
 		.from(answerEvent)
@@ -233,7 +246,7 @@ async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 		.values({
 			studentId: s.studentId,
 			runId: s.runId,
-			kind: TROPHY_FOR_MODE[mode],
+			kind,
 			mode,
 			setName: set?.name ?? '',
 			durationMs,

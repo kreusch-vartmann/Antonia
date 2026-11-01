@@ -1,11 +1,12 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
 	import Trophy from './Trophy.svelte';
 	import {
 		MODE_HELP,
 		MODE_LABEL,
 		RUN_MODES,
-		TROPHY_FOR_MODE,
 		clock,
+		trophyFor,
 		type RunMode
 	} from '#lib/domain/modes.ts';
 
@@ -22,6 +23,10 @@
 
 	// svelte-ignore state_referenced_locally
 	let timeChecked = $state(selected.includes('time'));
+	// svelte-ignore state_referenced_locally
+	let flawlessChecked = $state(selected.includes('flawless'));
+	// svelte-ignore state_referenced_locally
+	let recordChecked = $state(selected.includes('record') && selected.includes('flawless'));
 	// svelte-ignore state_referenced_locally
 	let minutes = $state<number | null>(Math.floor((targetTime ?? 0) / 60));
 	// svelte-ignore state_referenced_locally
@@ -44,7 +49,8 @@
 	<legend>Rennarten</legend>
 	<p class="muted small">
 		Das Kind kann nur die angehakten Rennarten mit diesem Set fahren. Für jede Rennart bekommt es
-		einen eigenen Pokal.
+		einen eigenen Pokal. „Bestzeit jagen“ gibt keinen Pokal: Dort fährt das Kind gegen seine eigene
+		Bestzeit aus „Fehlerfrei“.
 	</p>
 	{#each RUN_MODES as m (m)}
 		<label class="mode">
@@ -52,13 +58,24 @@
 				type="checkbox"
 				name="mode"
 				value={m}
-				checked={selected.includes(m)}
-				onchange={m === 'time' ? (e) => (timeChecked = e.currentTarget.checked) : undefined}
+				checked={m === 'record' ? recordChecked && flawlessChecked : selected.includes(m)}
+				disabled={m === 'record' && !flawlessChecked}
+				onchange={(e) => {
+					const on = e.currentTarget.checked;
+					if (m === 'time') timeChecked = on;
+					else if (m === 'flawless') flawlessChecked = on;
+					else if (m === 'record') recordChecked = on;
+				}}
 			/>
-			<span class="cup"><Trophy kind={TROPHY_FOR_MODE[m]} /></span>
+			<span class="cup">
+				{#if trophyFor(m)}<Trophy kind={trophyFor(m)!} />{:else}<Icon name="clock" size={26} />{/if}
+			</span>
 			<span>
 				<strong>{MODE_LABEL[m]}</strong>
-				<small class="muted">{MODE_HELP[m]}</small>
+				<small class="muted">
+					{MODE_HELP[m]}
+					{#if m === 'record' && !flawlessChecked}Dafür muss „Fehlerfrei“ angehakt sein.{/if}
+				</small>
 			</span>
 		</label>
 		{#if m === 'time' && timeChecked}
@@ -109,6 +126,8 @@
 	.cup {
 		width: 1.6rem;
 		flex: none;
+		display: flex;
+		justify-content: center;
 	}
 	.target {
 		display: flex;

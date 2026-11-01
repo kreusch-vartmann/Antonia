@@ -1,7 +1,7 @@
 <script lang="ts">
 	import RaceCar from '#lib/components/race/RaceCar.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
-	import { MODE_HELP, MODE_LABEL, TROPHY_FOR_MODE, clock } from '#lib/domain/modes.ts';
+	import { MODE_HELP, MODE_LABEL, clock, clockPrecise, trophyFor } from '#lib/domain/modes.ts';
 	import { date } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
@@ -41,23 +41,45 @@
 					<div class="modes">
 						{#each r.variants as v (v.assignmentId + v.mode)}
 							{@const label = `${MODE_LABEL[v.mode]}${v.mode === 'time' ? ` · ${clock(v.targetTime * 1000)}` : ''}`}
-							<a
-								class="mode {TROPHY_FOR_MODE[v.mode]}"
-								href="/ueben/rennen/{v.assignmentId}?mode={v.mode}"
-								aria-label="{r.setName} – {label}, {v.stars} Sterne"
-							>
-								<span class="cup"><Trophy kind={TROPHY_FOR_MODE[v.mode]} /></span>
-								<span class="mode-text">
-									<strong>{label}</strong>
-									<small>
-										{MODE_HELP[v.mode]}
-										{#if v.endsOn}· bis {date(v.endsOn)}{/if}
-									</small>
-								</span>
-								<span class="stars" aria-hidden="true">
-									{#each [1, 2, 3] as n (n)}<span class:on={n <= v.stars}>★</span>{/each}
-								</span>
-							</a>
+							{@const kind = trophyFor(v.mode)}
+							{#if v.mode === 'record' && !v.best}
+								<div class="mode record locked">
+									<span class="mode-text">
+										<strong>{label}</strong>
+										<small
+											>Fahre zuerst einmal „Fehlerfrei“, dann kannst du deine Bestzeit jagen.</small
+										>
+									</span>
+								</div>
+							{:else}
+								<a
+									class="mode {kind ?? 'record'}"
+									href="/ueben/rennen/{v.assignmentId}?mode={v.mode}"
+									aria-label={v.mode === 'record' && v.best
+										? `${r.setName} – ${label}, Bestzeit ${clockPrecise(v.best.durationMs)} vom ${date(v.best.at)}`
+										: `${r.setName} – ${label}, ${v.stars} Sterne`}
+								>
+									{#if kind}<span class="cup"><Trophy {kind} /></span>{/if}
+									<span class="mode-text">
+										<strong>{label}</strong>
+										<small>
+											{MODE_HELP[v.mode]}
+											{#if v.endsOn}· bis {date(v.endsOn)}{/if}
+										</small>
+									</span>
+									{#if v.mode === 'record' && v.best}
+										<span class="best">
+											<small>Bestzeit</small>
+											<strong>{clockPrecise(v.best.durationMs)}</strong>
+											<small>{date(v.best.at)}</small>
+										</span>
+									{:else}
+										<span class="stars" aria-hidden="true">
+											{#each [1, 2, 3] as n (n)}<span class:on={n <= v.stars}>★</span>{/each}
+										</span>
+									{/if}
+								</a>
+							{/if}
 						{/each}
 					</div>
 				</li>
@@ -128,8 +150,33 @@
 	.mode.gold {
 		border-color: #e8b218;
 	}
-	.mode:hover,
-	.mode:focus-visible {
+	.mode.record {
+		border-color: #5b8fd9;
+	}
+	.mode.locked {
+		opacity: 0.5;
+		filter: grayscale(1);
+		cursor: not-allowed;
+		border-style: dashed;
+	}
+	.best {
+		flex: none;
+		margin-left: auto;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		line-height: 1.2;
+		font-variant-numeric: tabular-nums;
+	}
+	.best strong {
+		font-size: 1.4rem;
+	}
+	.best small {
+		color: var(--color-muted);
+		font-size: 0.8em;
+	}
+	.mode:hover:not(.locked),
+	.mode:focus-visible:not(.locked) {
 		background: #f4f8ff;
 		border-color: var(--color-primary);
 	}
