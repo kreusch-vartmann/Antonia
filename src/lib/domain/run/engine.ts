@@ -33,8 +33,13 @@ interface Current {
 	/** Slot key of the task in this run (see RunTaskDef.slot). */
 	taskId: string;
 	presentation: number;
-	/** Wrong attempts in this presentation. */
+	/** Wrong attempts in this presentation (all steps). */
 	wrong: number;
+	/** Wrong attempts in the current step (hints and solution depend on this). */
+	stepWrong?: number;
+	/** Current step of a task with several answers, and the answers given so far. */
+	step?: number;
+	filled?: string[];
 	timeouts: number;
 	hintShown: boolean;
 	solutionShown: boolean;
@@ -74,6 +79,8 @@ export interface AnswerEventDraft {
 	family: string;
 	seq: number;
 	round: number;
+	step: number;
+	steps: number;
 	kind: 'answer' | 'timeout';
 	given: string | null;
 	correct: boolean;
@@ -91,6 +98,8 @@ export interface Feedback {
 	afterSolution?: boolean;
 	/** Solved on the very first try. */
 	firstTry?: boolean;
+	/** A step of a task with several answers was right, the task goes on. */
+	step?: boolean;
 	/** The mistake ended a flawless race (engine failure). */
 	failed?: boolean;
 }
@@ -112,6 +121,9 @@ export interface CurrentView {
 	taskTimeLimit: number;
 	/** ms since the task was shown (for timers after reload). */
 	shownElapsedMs: number;
+	/** Current step and number of steps (more than one for decomposed tasks). */
+	step: number;
+	steps: number;
 }
 
 export interface RunView {
@@ -231,25 +243,30 @@ function advance(state: RunState, now: number) {
 	const def = state.tasks[id];
 	const presentation = (state.presentations[id] ?? 0) + 1;
 	state.presentations[id] = presentation;
-	let choices: number[] | undefined;
-	if (def.settings.answerFormat === 'choice') {
-		const fmt = formatOf(def.content);
-		const r = random(state);
-		const answer = Number(fmt.solution(def.content));
-		const wrong = fmt.distractors(def.content, def.settings.choiceCount - 1, r);
-		choices = shuffle([answer, ...wrong], r);
-	}
 	state.current = {
 		taskId: id,
 		presentation,
 		wrong: 0,
+		stepWrong: 0,
+		step: 0,
+		filled: [],
 		timeouts: 0,
 		hintShown: false,
 		solutionShown: false,
-		choices,
+		choices: makeChoices(state, def, 0),
 		disabledChoices: [],
 		shownAt: now
 	};
+}
+
+/** Answer options for one step (choice mode only). */
+function makeChoices(state: RunState, def: RunTaskDef, step: number): number[] | undefined {
+	if (def.settings.answerFormat !== 'choice') return undefined;
+	const fmt = formatOf(def.content);
+	const r = random(state);
+	const answer = fmt.expected(def.content, step);
+	const wrong = fmt.distractors(def.content, def.settings.choiceCount - 1, r, step);
+	return shuffle([answer, ...wrong], r);
 }
 
 function finish(state: RunState, now: number, status: RunStatus) {
@@ -291,7 +308,9 @@ function eventBase(
 		round: def.round ?? 0,
 		family: formatOf(def.content).family(def.content),
 		seq: state.seq,
-		attempt: cur.wrong + 1,
+		step: cur.step ?? 0,
+		steps: formatOf(def.content).steps(def.content),
+		attempt: (cur.stepWrong ?? cur.wrong) + 1,
 		presentation: cur.presentation,
 		hintShown: cur.hintShown,
 		solutionShown: cur.solutionShown
@@ -300,9 +319,11 @@ function eventBase(
 
 function registerWrong(state: RunState, cur: Current) {
 	const def = state.tasks[cur.taskId];
+	const stepWrong = (cur.stepWrong ?? cur.wrong) + 1;
 	cur.wrong += 1;
-	if (cur.wrong >= def.settings.solutionAfter) cur.solutionShown = true;
-	if (def.settings.hintAfter > 0 && cur.wrong >= def.settings.hintAfter) cur.hintShown = true;
+	cur.stepWrong = stepWrong;
+	if (stepWrong >= def.settings.solutionAfter) cur.solutionShown = true;
+	if (def.settings.hintAfter > 0 && stepWrong >= def.settings.hintAfter) cur.hintShown = true;
 }
 
 export function answer(
@@ -321,7 +342,9 @@ export function answer(
 	if (cur.choices && cur.disabledChoices.includes(Number(value))) {
 		return { state, feedback: { outcome: 'ignored' }, events: [] };
 	}
-	const correct = fmt.check(def.content, value);
+	const step = cur.step ?? 0;
+	const steps = fmt.steps(def.content);
+	const correct = fmt.check(def.content, value, step);
 	const ms = input.ms === null ? null : Math.max(0, Math.min(Math.round(input.ms), 3_600_000));
 	const event: AnswerEventDraft = {
 		...eventBase(state, cur),
@@ -329,8 +352,21 @@ export function answer(
 		given: value,
 		correct,
 		ms,
-		errorPattern: correct ? null : fmt.errorPattern(def.content, value)
+		errorPattern: correct ? null : fmt.errorPattern(def.content, value, step)
 	};
+
+	if (correct && step < steps - 1) {
+		// A step of a decomposed task: the task goes on, the car does not move.
+		cur.filled = [...(cur.filled ?? []), value];
+		cur.step = step + 1;
+		cur.stepWrong = 0;
+		cur.hintShown = false;
+		cur.solutionShown = false;
+		cur.disabledChoices = [];
+		cur.choices = makeChoices(state, def, step + 1);
+		cur.shownAt = now;
+		return { state, feedback: { outcome: 'correct', step: true }, events: [event] };
+	}
 
 	if (correct) {
 		const firstTry = cur.presentation === 1 && cur.wrong === 0 && cur.timeouts === 0;
@@ -412,7 +448,8 @@ export function abort(state: RunState, now: number): RunState {
 }
 
 function currentKey(cur: Current) {
-	return `${cur.taskId}:${cur.presentation}:${cur.timeouts}`;
+	const base = `${cur.taskId}:${cur.presentation}:${cur.timeouts}`;
+	return cur.step ? `${base}:${cur.step}` : base;
 }
 
 export function result(state: RunState): RunResult | null {
@@ -432,16 +469,22 @@ export function view(state: RunState, now: number): RunView {
 	if (cur && state.status === 'running') {
 		const def = state.tasks[cur.taskId];
 		const fmt = formatOf(def.content);
+		const step = cur.step ?? 0;
 		current = {
 			key: currentKey(cur),
-			presentation: { ...fmt.present(def.content), choices: cur.choices },
+			presentation: {
+				...fmt.present(def.content, { step, filled: cur.filled ?? [] }),
+				choices: cur.choices
+			},
 			answerFormat: def.settings.answerFormat,
 			wrong: cur.wrong,
-			hint: cur.hintShown || cur.solutionShown ? fmt.hint(def.content) : null,
-			solution: cur.solutionShown ? fmt.solution(def.content) : null,
+			hint: cur.hintShown || cur.solutionShown ? fmt.hint(def.content, step) : null,
+			solution: cur.solutionShown ? fmt.solution(def.content, step) : null,
 			disabledChoices: cur.disabledChoices,
 			taskTimeLimit: cur.solutionShown ? 0 : def.settings.taskTimeLimit,
-			shownElapsedMs: Math.max(0, now - cur.shownAt)
+			shownElapsedMs: Math.max(0, now - cur.shownAt),
+			step,
+			steps: fmt.steps(def.content)
 		};
 	}
 	return {

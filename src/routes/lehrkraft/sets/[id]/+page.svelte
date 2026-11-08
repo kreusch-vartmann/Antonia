@@ -57,6 +57,7 @@
 					>Reihenfolge per Zufall ändern</button
 				>
 			</form>
+			<a class="btn small" href="/lehrkraft/sets/{data.set.id}/aufgabe/neu">Einzelne Aufgabe</a>
 			<a class="btn btn-primary small" href="/lehrkraft/sets/{data.set.id}/aufgaben"
 				>Aufgaben hinzufügen</a
 			>
@@ -64,9 +65,7 @@
 	</div>
 	{#if data.items.length === 0}
 		<p class="muted">
-			Noch keine Aufgaben. <a href="/lehrkraft/sets/{data.set.id}/aufgaben"
-				>Aus dem Pool hinzufügen</a
-			>
+			Noch keine Aufgaben. <a href="/lehrkraft/sets/{data.set.id}/aufgaben">Aufgaben hinzufügen</a>
 		</p>
 	{:else}
 		<ol class="items">
@@ -74,8 +73,13 @@
 				<li>
 					<div class="spread">
 						<span>
-							<a href="/lehrkraft/aufgaben/{item.taskId}">{item.label}</a>
+							<a href="/lehrkraft/sets/{data.set.id}/aufgabe/{item.taskId}">{item.label}</a>
 							<span class="muted small">→ {item.answer}</span>
+							{#if item.decompose}
+								<span class="tag"
+									>Zerlegung: {item.decompose === 'fill' ? 'ausfüllen' : 'anzeigen'}</span
+								>
+							{/if}
 						</span>
 						<span class="row">
 							<form method="POST" action="?/move" use:enhance>
@@ -107,7 +111,7 @@
 	{/if}
 </section>
 
-<section class="card stack">
+<section class="card stack" id="zuweisen">
 	<h2>Zuweisungen</h2>
 	{#if data.assignments.length > 0}
 		<div class="table-wrap">

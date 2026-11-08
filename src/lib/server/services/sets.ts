@@ -179,6 +179,42 @@ export async function updateItemSettings(
 		.where(and(eq(taskSetItem.id, itemId), eq(taskSetItem.setId, setId)));
 }
 
+/** Puts another task in the place of a task of the set (same position and item settings). */
+export async function replaceItemTask(
+	db: Db,
+	teacherId: string,
+	setId: string,
+	oldTaskId: string,
+	newTaskId: string
+) {
+	const set = await getSet(db, teacherId, setId);
+	if (!set) throw new ValidationError('Set nicht gefunden.');
+	const [owned] = await db
+		.select({ id: task.id })
+		.from(task)
+		.where(and(eq(task.id, newTaskId), eq(task.teacherId, teacherId)));
+	if (!owned) throw new ValidationError('Unbekannte Aufgabe.');
+	await db
+		.update(taskSetItem)
+		.set({ taskId: newTaskId })
+		.where(and(eq(taskSetItem.setId, setId), eq(taskSetItem.taskId, oldTaskId)));
+	await db.update(taskSet).set({ updatedAt: new Date() }).where(eq(taskSet.id, setId));
+}
+
+/** Deletes the given tasks if no set uses them any more (tasks only live inside sets). */
+export async function deleteUnusedTasks(db: Db, teacherId: string, taskIds: string[]) {
+	if (taskIds.length === 0) return;
+	const used = await db
+		.select({ id: taskSetItem.taskId })
+		.from(taskSetItem)
+		.where(inArray(taskSetItem.taskId, taskIds));
+	const inUse = new Set(used.map((u) => u.id));
+	const unused = taskIds.filter((id) => !inUse.has(id));
+	if (unused.length)
+		await db.delete(task).where(and(eq(task.teacherId, teacherId), inArray(task.id, unused)));
+}
+
+/** A copy of the set with copies of its tasks, so that changes in one do not affect the other. */
 export async function duplicateSet(db: Db, teacherId: string, id: string) {
 	const set = await getSet(db, teacherId, id);
 	if (!set) throw new ValidationError('Set nicht gefunden.');
@@ -189,10 +225,24 @@ export async function duplicateSet(db: Db, teacherId: string, id: string) {
 		settings: set.settings
 	});
 	if (items.length) {
+		const copies = await db
+			.insert(task)
+			.values(
+				items.map((i) => ({
+					teacherId,
+					subject: i.task.subject,
+					format: i.task.format,
+					content: i.task.content,
+					tags: i.task.tags,
+					origin: i.task.origin,
+					settings: i.task.settings
+				}))
+			)
+			.returning({ id: task.id });
 		await db.insert(taskSetItem).values(
-			items.map((i) => ({
+			items.map((i, n) => ({
 				setId: newId,
-				taskId: i.task.id,
+				taskId: copies[n].id,
 				position: i.position,
 				settings: i.itemSettings
 			}))
@@ -215,7 +265,9 @@ export async function removeSet(db: Db, teacherId: string, id: string) {
 		await db.update(assignment).set({ archived: true }).where(eq(assignment.setId, id));
 		return 'archived' as const;
 	}
+	const taskIds = (await getSetItems(db, id)).map((i) => i.task.id);
 	await db.delete(taskSet).where(and(eq(taskSet.id, id), eq(taskSet.teacherId, teacherId)));
+	await deleteUnusedTasks(db, teacherId, taskIds);
 	return 'deleted' as const;
 }
 

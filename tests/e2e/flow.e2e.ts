@@ -1,47 +1,16 @@
 /**
- * End-to-end: setup → child → generator set → assignment → race → evaluation.
+ * End-to-end: setup → child → wizard set → assignment → race → evaluation.
  * Uses only invented demo data. Requires a fresh database and SETUP_TOKEN.
  */
-import { expect, test, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
-
-/** Fails on serious/critical accessibility violations (WCAG 2.x A/AA). */
-async function a11y(page: Page) {
-	const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
-	const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
-	expect(bad.map((v) => `${v.id}: ${v.nodes.length}× ${v.help}`)).toEqual([]);
-}
-
-const SETUP_TOKEN = process.env.E2E_SETUP_TOKEN ?? 'local-setup-token-123';
-// Erfundene Testdaten, kein echtes Passwort.
-const TEACHER = { username: 'testlehrkraft', password: 'Test-Passwort-123' }; // gitleaks:allow
-const shots = process.env.E2E_SCREENSHOTS;
+import { expect, test } from '@playwright/test';
+import { TEACHER, a11y, shots, teacherLogin } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
 let kidPassword = '';
 
 test('teacher sets up account, child, set and assignment', async ({ page }) => {
-	await page.goto('/setup');
-	if (
-		await page
-			.getByLabel('Einrichtungs-Token')
-			.isVisible()
-			.catch(() => false)
-	) {
-		await page.getByLabel('Einrichtungs-Token').fill(SETUP_TOKEN);
-		await page.getByLabel('Dein Name').fill('Frau Beispiel');
-		await page.getByLabel('Benutzername').fill(TEACHER.username);
-		await page.getByLabel('Passwort (mind. 10 Zeichen)').fill(TEACHER.password);
-		await page.getByLabel('Passwort wiederholen').fill(TEACHER.password);
-		await page.getByRole('button', { name: 'Konto anlegen' }).click();
-	} else {
-		await page.goto('/login');
-		await page.getByLabel('Benutzername').fill(TEACHER.username);
-		await page.getByLabel('Passwort', { exact: true }).fill(TEACHER.password);
-		await page.getByRole('button', { name: 'Anmelden' }).click();
-	}
-	await expect(page.getByRole('heading', { name: /Hallo/ })).toBeVisible();
+	await teacherLogin(page);
 	if (shots) await page.screenshot({ path: `${shots}/01-dashboard.png`, fullPage: true });
 	await a11y(page);
 
@@ -53,22 +22,26 @@ test('teacher sets up account, child, set and assignment', async ({ page }) => {
 	await page.getByRole('button', { name: 'Anlegen', exact: true }).click();
 	await expect(page.getByText('Das Kind wurde angelegt.')).toBeVisible();
 
-	// generator → set
-	await page.goto('/lehrkraft/aufgaben/generator');
-	await page.locator('input[name="p.to"]').fill('3');
-	await page.getByRole('button', { name: 'Vorschau erzeugen' }).click();
+	// wizard → set: times table 5, factors 1 to 3
+	await page.goto('/lehrkraft/sets/neu');
+	await page.getByRole('radio', { name: 'Mal', exact: true }).check({ force: true });
+	await page.getByLabel('5er', { exact: true }).check();
+	await page.getByText('Feineinstellung').click();
+	await page.getByLabel('Faktor bis').fill('3');
+	await page.getByLabel('Anzahl der Aufgaben').fill('3');
+	await page.getByRole('button', { name: 'Aufgaben erzeugen' }).click();
 	await expect(page.getByRole('heading', { name: /Vorschau \(3 Aufgaben\)/ })).toBeVisible();
-	// Improvement 2: warn while the calculation does not add up
+	// warn while the calculation does not add up
 	const answer0 = page.locator('input[name="d.0.answer"]');
 	await answer0.fill('99');
 	await expect(page.getByText('Die Rechnung geht nicht auf.')).toBeVisible();
 	await expect(page.getByText('1 · 5 = 99 geht nicht auf.')).toBeVisible();
 	await expect(page.getByText(/Bei 1 Aufgabe\(n\) geht die Rechnung nicht auf/)).toBeVisible();
-	if (shots) await page.screenshot({ path: `${shots}/02b-generator-warning.png`, fullPage: true });
+	if (shots) await page.screenshot({ path: `${shots}/02b-wizard-warning.png`, fullPage: true });
 	await answer0.fill('5');
 	await expect(page.getByText('Die Rechnung geht nicht auf.')).toHaveCount(0);
-	if (shots) await page.screenshot({ path: `${shots}/02-generator.png`, fullPage: true });
-	await page.getByRole('button', { name: 'Speichern', exact: true }).click();
+	if (shots) await page.screenshot({ path: `${shots}/02-wizard.png`, fullPage: true });
+	await page.getByRole('button', { name: 'Set speichern' }).click();
 	await expect(page.getByRole('heading', { name: 'Einmaleins 5er-Reihe' })).toBeVisible();
 
 	// assign with choice format for this assignment

@@ -280,6 +280,8 @@ async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) 
 			attempt: e.attempt,
 			presentation: e.presentation,
 			round: e.round,
+			step: e.step,
+			steps: e.steps,
 			hintShown: e.hintShown,
 			solutionShown: e.solutionShown,
 			ms: e.ms,

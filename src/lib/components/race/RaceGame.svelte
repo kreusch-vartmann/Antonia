@@ -49,6 +49,7 @@
 
 	const view = $derived(payload.view);
 	const cur = $derived(view.current);
+	const hasSplit = $derived(!!cur?.presentation.parts.some((p) => p.kind === 'num' && p.split));
 	const settings = $derived(payload.settings);
 	const calm = $derived(settings.calm);
 	const mode = $derived(view.mode);
@@ -232,6 +233,10 @@
 		if (fb.failed) {
 			if (settings.sound) sounds.wrong();
 			message = null;
+		} else if (fb.outcome === 'correct' && fb.step) {
+			// a step of a decomposed task: the next question is read aloud by the new task effect
+			if (settings.sound) sounds.tap();
+			message = { kind: 'good', text: 'Richtig! Weiter.' };
 		} else if (fb.outcome === 'correct') {
 			if (settings.sound) sounds.correct();
 			const text = fb.afterSolution
@@ -538,14 +543,32 @@
 					{#if cur.presentation.question}
 						<p class="question">{cur.presentation.question}</p>
 					{/if}
-					<p class="expr" aria-live="polite">
+					<p class="expr" class:with-split={hasSplit} class:long={cur.steps > 1} aria-live="polite">
 						{#each cur.presentation.parts as part, i (i)}
 							{#if part.kind === 'gap'}
 								<span class="gap role-{part.role}" class:filled={input !== ''} aria-label="Antwort"
 									>{input || '?'}</span
 								>
+							{:else if part.kind === 'blank'}
+								<span class="blank role-{part.role}" aria-hidden="true"></span>
 							{:else if part.kind === 'num'}
-								<span class="num role-{part.role}">{part.value}</span>
+								<span class="num role-{part.role}"
+									>{part.value}{#if part.split}<span
+											class="split"
+											role="img"
+											aria-label="{part.value} ist {part.split[0]} und {part.split[1]}"
+											><svg viewBox="0 0 40 16" width="40" height="16" aria-hidden="true"
+												><path
+													d="M20 0 L6 16 M20 0 L34 16"
+													stroke="currentColor"
+													stroke-width="2"
+													fill="none"
+												/></svg
+											><span class="split-parts"
+												><span>{part.split[0]}</span><span>{part.split[1]}</span></span
+											></span
+										>{/if}</span
+								>
 							{:else}
 								<span>{part.value}</span>
 							{/if}
@@ -791,6 +814,7 @@
 		align-items: center;
 	}
 	.panel {
+		container-type: inline-size;
 		background: #fff;
 		border-radius: var(--radius);
 		padding: var(--space-4);
@@ -838,6 +862,57 @@
 	.num.role-b,
 	.num.role-part {
 		color: var(--color-num-b);
+	}
+	.blank {
+		display: inline-block;
+		min-width: 1.4em;
+		height: 1.1em;
+		border: 3px dashed #c3c9d0;
+		border-radius: 0.2em;
+	}
+	.blank.role-b,
+	.blank.role-part {
+		border-color: #e8a3a3;
+	}
+	.num {
+		position: relative;
+	}
+	.expr.with-split {
+		padding-bottom: 1.5em;
+	}
+	/* decomposed task: 8 + 7 = 8 + 2 + 5 = 15 stays on one line */
+	.expr.long {
+		flex-wrap: nowrap;
+		gap: 0.2em;
+		font-size: 1.6rem;
+		font-size: clamp(1.2rem, 4.2vw, 2.1rem);
+	}
+	@supports (width: 1cqw) {
+		.expr.long {
+			font-size: clamp(1.2rem, 7.5cqw, 2.1rem);
+		}
+	}
+	.expr.long .gap {
+		min-width: 1.6em;
+	}
+	.expr.long .blank {
+		min-width: 1em;
+	}
+	.split {
+		position: absolute;
+		top: 100%;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		font-size: 0.5em;
+		line-height: 1.1;
+		color: var(--color-num-b);
+	}
+	.split-parts {
+		display: flex;
+		gap: 0.7em;
 	}
 	.gap.role-a {
 		border-bottom-color: var(--color-num-a);

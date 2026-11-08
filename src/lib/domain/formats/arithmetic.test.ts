@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arithmetic, checkConsistency, computeResult } from './arithmetic';
+import { arithmetic, checkConsistency, computeResult, decomposition } from './arithmetic';
 import type { ArithmeticContent } from './types';
 import { rng } from '../random';
 
@@ -182,5 +182,101 @@ describe('arithmetic format', () => {
 			'invalid'
 		);
 		expect(checkConsistency({ ...base, b: null, answer: 15 }).status).toBe('incomplete');
+	});
+});
+
+describe('decomposition of the second number', () => {
+	it('splits to the next ten or into tens and ones', () => {
+		expect(decomposition(8, '+', 7)).toEqual([2, 5]);
+		expect(decomposition(38, '+', 7)).toEqual([2, 5]);
+		expect(decomposition(8, '+', 2)).toBeNull();
+		expect(decomposition(5, '+', 3)).toBeNull();
+		expect(decomposition(34, '+', 25)).toEqual([20, 5]);
+		expect(decomposition(34, '+', 20)).toBeNull();
+		expect(decomposition(15, '-', 7)).toEqual([5, 2]);
+		expect(decomposition(13, '-', 5)).toEqual([3, 2]);
+		expect(decomposition(20, '-', 7)).toBeNull();
+		expect(decomposition(9, '-', 4)).toBeNull();
+		expect(decomposition(57, '-', 25)).toEqual([20, 5]);
+		expect(decomposition(3, '*', 5)).toBeNull();
+	});
+
+	const fill = (decompose: 'show' | 'fill' = 'fill'): ArithmeticContent => ({
+		...add(8, 7),
+		decompose
+	});
+
+	it('is dropped when the task has no usable split', () => {
+		const v = arithmetic.validate({ ...add(8, 2), decompose: 'fill' });
+		expect(v.ok && v.content.decompose).toBeUndefined();
+		const w = arithmetic.validate({ ...add(8, 7, '+', 'b'), decompose: 'show' });
+		expect(w.ok && w.content.decompose).toBeUndefined();
+		const x = arithmetic.validate(fill());
+		expect(x.ok && x.content.decompose).toBe('fill');
+	});
+
+	it('"fill" asks for the two parts and then the result, one after the other', () => {
+		const c = fill();
+		expect(arithmetic.steps(c)).toBe(3);
+		expect([0, 1, 2].map((i) => arithmetic.expected(c, i))).toEqual([2, 5, 15]);
+		expect(arithmetic.check(c, '2', 0)).toBe(true);
+		expect(arithmetic.check(c, '2', 1)).toBe(false);
+		expect(arithmetic.solution(c, 2)).toBe('15');
+
+		const kinds = (step: number, filled: string[]) =>
+			arithmetic.present(c, { step, filled }).parts.map((p) => p.kind);
+		expect(kinds(0, [])).toEqual([
+			'num',
+			'op',
+			'num',
+			'op',
+			'num',
+			'op',
+			'gap',
+			'op',
+			'blank',
+			'op',
+			'blank'
+		]);
+		expect(kinds(1, ['2'])).toEqual([
+			'num',
+			'op',
+			'num',
+			'op',
+			'num',
+			'op',
+			'num',
+			'op',
+			'gap',
+			'op',
+			'blank'
+		]);
+		const last = arithmetic.present(c, { step: 2, filled: ['2', '5'] }).parts;
+		expect(last.at(-1)).toEqual({ kind: 'gap', role: 'result' });
+		// the parts of the second number are red like the number itself
+		expect(last[6]).toEqual({ kind: 'num', value: '2', role: 'part' });
+		expect(last[8]).toEqual({ kind: 'num', value: '5', role: 'part' });
+		expect(arithmetic.present(c, { step: 0, filled: [] }).speech).toBe(
+			'Wie viel fehlt von 8 bis zum nächsten Zehner?'
+		);
+		expect(arithmetic.solved(c)).toBe('8 + 7 = 8 + 2 + 5 = 15');
+	});
+
+	it('"show" only draws the split below the second number', () => {
+		const c = fill('show');
+		expect(arithmetic.steps(c)).toBe(1);
+		const parts = arithmetic.present(c).parts;
+		expect(parts[2]).toEqual({ kind: 'num', value: '7', role: 'b', split: ['2', '5'] });
+		expect(parts.at(-1)).toEqual({ kind: 'gap', role: 'result' });
+		expect(arithmetic.solved(c)).toBe('8 + 7 = 15');
+	});
+
+	it('gives a hint for every step and keeps the old hint for the result', () => {
+		const c = fill();
+		expect(arithmetic.hint(c, 0)?.visual).toMatchObject({ kind: 'twenty', a: 8, b: 7 });
+		expect(arithmetic.hint(c, 1)?.text).toContain('Es bleiben 5');
+		expect(arithmetic.hint(c, 2)?.text).toContain('Rechne erst bis 10');
+		expect(arithmetic.distractors(c, 2, rng(1), 0)).toHaveLength(2);
+		expect(arithmetic.distractors(c, 2, rng(1), 0)).not.toContain(2);
 	});
 });

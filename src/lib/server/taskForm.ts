@@ -52,5 +52,7 @@ export function arithmeticFromForm(form: FormData, p = ''): ArithmeticContent {
 	if (answer === null || Number.isNaN(answer)) {
 		throw new ValidationError('Bitte das Ergebnis angeben (ganze Zahl ≥ 0).');
 	}
-	return { format: 'arithmetic', expr, text, answer, distractors, hint };
+	const dec = String(g('decompose') ?? '');
+	const decompose = dec === 'show' || dec === 'fill' ? dec : undefined;
+	return { format: 'arithmetic', expr, text, answer, distractors, hint, decompose };
 }

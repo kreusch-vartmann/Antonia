@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { db, requireTeacher } from '#lib/server/auth/guard.ts';
 import {
 	assign,
+	deleteUnusedTasks,
 	getSet,
 	getSetItems,
 	listAssignmentsForSet,
@@ -31,7 +32,8 @@ export const load: PageServerLoad = async (event) => {
 			itemId: i.itemId,
 			taskId: i.task.id,
 			label: formatOf(i.task.content).label1(i.task.content),
-			answer: i.task.content.answer
+			answer: i.task.content.answer,
+			decompose: i.task.content.decompose ?? null
 		})),
 		assignments,
 		students
@@ -74,6 +76,8 @@ export const actions: Actions = {
 		const taskId = str(await event.request.formData(), 'taskId');
 		const order = (await currentOrder(event.params.id)).filter((t) => t !== taskId);
 		await setItems(db(), teacherId, event.params.id, order);
+		// tasks only live inside sets
+		await deleteUnusedTasks(db(), teacherId, [taskId]);
 	},
 	shuffle: async (event) => {
 		const teacherId = requireTeacher(event);

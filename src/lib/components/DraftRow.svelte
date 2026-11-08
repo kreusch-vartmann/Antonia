@@ -1,16 +1,35 @@
+<script lang="ts" module>
+	import type { ArithmeticContent } from '#lib/domain/formats/types.ts';
+
+	/** A task draft; a blank row (manual input) has no numbers yet. */
+	export interface DraftInit {
+		expr?: ArithmeticContent['expr'];
+		answer: number | null;
+		hint?: string;
+		decompose?: 'show' | 'fill';
+	}
+</script>
+
 <script lang="ts">
 	import CalcWarning from './CalcWarning.svelte';
-	import { checkConsistency, OP_SYMBOL } from '#lib/domain/formats/arithmetic.ts';
-	import type { ArithmeticContent, Gap, Op } from '#lib/domain/formats/types.ts';
+	import {
+		checkConsistency,
+		decomposition,
+		expectedAnswer,
+		OP_SYMBOL
+	} from '#lib/domain/formats/arithmetic.ts';
+	import type { Gap, Op } from '#lib/domain/formats/types.ts';
 
 	interface Props {
 		index: number;
-		draft: ArithmeticContent;
-		/** Reports whether the row is included and consistent (for the summary). */
-		onstate?: (index: number, problem: boolean) => void;
+		draft: DraftInit;
+		/** Reports whether the row is included and whether it is consistent (for the summary). */
+		onstate?: (index: number, state: { include: boolean; problem: boolean }) => void;
+		/** Shows a button to remove the row (manual input). */
+		onremove?: () => void;
 	}
 
-	let { index, draft, onstate }: Props = $props();
+	let { index, draft, onstate, onremove }: Props = $props();
 
 	let include = $state(true);
 	// svelte-ignore state_referenced_locally
@@ -23,15 +42,31 @@
 	let gap = $state<Gap>(draft.expr?.gap ?? 'result');
 	// svelte-ignore state_referenced_locally
 	let answer = $state<number | null>(draft.answer);
+	// svelte-ignore state_referenced_locally
+	let decompose = $state<'' | 'show' | 'fill'>(draft.decompose ?? '');
+	/** Once the teacher typed an answer, it is no longer calculated automatically. */
+	let touched = false;
 
+	$effect(() => {
+		if (touched || a === null || b === null) return;
+		const e = expectedAnswer({ a, op, b, gap });
+		if (e !== null) answer = e;
+	});
+
+	/** An empty row of the manual input: ignored when saving. */
+	const blank = $derived(a === null && b === null);
+	const split = $derived(
+		gap === 'result' && a !== null && b !== null ? decomposition(a, op, b) : null
+	);
 	const check = $derived(checkConsistency({ a, op, b, gap, answer }));
 	const problem = $derived(
 		include &&
+			!blank &&
 			(check.status === 'mismatch' || check.status === 'invalid' || check.status === 'incomplete')
 	);
 
 	$effect(() => {
-		onstate?.(index, problem);
+		onstate?.(index, { include: include && !blank, problem });
 	});
 
 	const n = (k: string) => `d.${index}.${k}`;
@@ -71,16 +106,49 @@
 			type="number"
 			min="0"
 			bind:value={answer}
+			oninput={() => (touched = true)}
 			aria-label="Antwort"
 			aria-invalid={problem}
 		/>
 	</td>
-	<td><input name={n('hint')} placeholder="automatisch" aria-label="Eigene Hilfe" /></td>
+	<td>
+		<select
+			name={n('decompose')}
+			bind:value={decompose}
+			disabled={!split}
+			aria-label="Zahlzerlegung"
+			title={split
+				? `${b} = ${split[0]} + ${split[1]}`
+				: 'Nur bei Plus/Minus mit gesuchtem Ergebnis'}
+		>
+			<option value="">keine</option>
+			<option value="show">anzeigen</option>
+			<option value="fill">ausfüllen</option>
+		</select>
+	</td>
+	<td
+		><input
+			name={n('hint')}
+			placeholder="automatisch"
+			aria-label="Eigene Hilfe"
+			value={draft.hint ?? ''}
+		/></td
+	>
+	{#if onremove}
+		<td>
+			<button
+				type="button"
+				class="btn small btn-danger"
+				onclick={onremove}
+				aria-label="Zeile entfernen">✕</button
+			>
+		</td>
+	{/if}
 </tr>
-{#if include && (check.status === 'mismatch' || check.status === 'invalid')}
+{#if include && !blank && (check.status === 'mismatch' || check.status === 'invalid')}
 	<tr class="warn-row">
 		<td></td>
-		<td colspan="6"><CalcWarning result={check} /></td>
+		<td colspan="7"><CalcWarning result={check} /></td>
 	</tr>
 {/if}
 

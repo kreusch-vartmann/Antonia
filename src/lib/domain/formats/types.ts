@@ -21,6 +21,11 @@ export interface ArithmeticContent {
 	distractors?: number[];
 	/** Optional custom hint text by the teacher. */
 	hint?: string;
+	/**
+	 * Split of the second number for plus/minus tasks with a gap at the result:
+	 * `show` draws the split, `fill` makes the child enter the two parts and then the result.
+	 */
+	decompose?: 'show' | 'fill';
 }
 
 /** Union of all task contents. New formats extend this union. */
@@ -46,10 +51,14 @@ export interface Hint {
 export type PartRole = 'a' | 'b' | 'result' | 'part';
 
 export type PresentationPart =
-	| { kind: 'num'; value: string; role: PartRole }
+	/** `split` draws the decomposition of this number below it. */
+	| { kind: 'num'; value: string; role: PartRole; split?: [string, string] }
 	| { kind: 'op'; value: string }
 	| { kind: 'text'; value: string }
-	| { kind: 'gap'; role: PartRole };
+	/** The input slot of the current step. */
+	| { kind: 'gap'; role: PartRole }
+	/** An input slot of a later step. */
+	| { kind: 'blank'; role: PartRole };
 
 /** What the child sees. Contains no solution. */
 export interface Presentation {
@@ -63,18 +72,32 @@ export interface Presentation {
 	choices?: number[];
 }
 
+/** How far the child is in a task with several steps. */
+export interface StepProgress {
+	step: number;
+	/** Answers of the finished steps. */
+	filled: string[];
+}
+
 export interface TaskFormat<C extends TaskContent = TaskContent> {
 	id: C['format'];
 	label: string;
 	validate(content: unknown): { ok: true; content: C } | { ok: false; error: string };
-	present(content: C): Omit<Presentation, 'choices'>;
+	/** `progress` is only needed for tasks with several steps; with `step >= steps` the task is shown solved. */
+	present(content: C, progress?: StepProgress): Omit<Presentation, 'choices'>;
+	/** Number of answers the child has to give (1 for normal tasks). */
+	steps(content: C): number;
+	/** The expected answer of a step as a number. */
+	expected(content: C, step?: number): number;
+	/** The whole task with all answers filled in, e.g. "8 + 7 = 8 + 2 + 5 = 15". */
+	solved(content: C): string;
 	/** Short one-line label for lists, e.g. "3 · 5 = ?". */
 	label1(content: C): string;
-	check(content: C, given: string): boolean;
-	solution(content: C): string;
-	hint(content: C): Hint | null;
-	distractors(content: C, count: number, rng: () => number): number[];
-	errorPattern(content: C, given: string): string | null;
+	check(content: C, given: string, step?: number): boolean;
+	solution(content: C, step?: number): string;
+	hint(content: C, step?: number): Hint | null;
+	distractors(content: C, count: number, rng: () => number, step?: number): number[];
+	errorPattern(content: C, given: string, step?: number): string | null;
 	/** Grouping for analytics, e.g. "1x1 Kernaufgabe". */
 	family(content: C): string;
 }

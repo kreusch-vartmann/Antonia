@@ -1,4 +1,4 @@
-import { and, arrayContains, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { getFormat } from '#lib/domain/formats/index.ts';
@@ -80,40 +80,6 @@ export async function getTask(db: Db, teacherId: string, id: string) {
 	return t ?? null;
 }
 
-export interface TaskFilter {
-	tag?: string;
-	op?: string;
-	q?: string;
-	ids?: string[];
-}
-
-export async function listTasks(db: Db, teacherId: string, f: TaskFilter = {}) {
-	const conds = [eq(task.teacherId, teacherId), eq(task.archived, false)];
-	if (f.tag) conds.push(arrayContains(task.tags, [f.tag]));
-	if (f.op) conds.push(sql`${task.content}->'expr'->>'op' = ${f.op}`);
-	if (f.q) {
-		const like = `%${f.q.replace(/[%_\\]/g, '\\$&')}%`;
-		conds.push(
-			sql`(${task.content}::text ilike ${like} or array_to_string(${task.tags}, ',') ilike ${like})`
-		);
-	}
-	if (f.ids) conds.push(f.ids.length ? inArray(task.id, f.ids) : sql`false`);
-	return db
-		.select()
-		.from(task)
-		.where(and(...conds))
-		.orderBy(desc(task.createdAt), asc(task.id))
-		.limit(1000);
-}
-
-export async function allTags(db: Db, teacherId: string): Promise<string[]> {
-	const rows = await db
-		.selectDistinct({ tag: sql<string>`unnest(${task.tags})`.as('tag') })
-		.from(task)
-		.where(and(eq(task.teacherId, teacherId), eq(task.archived, false)));
-	return rows.map((r) => r.tag).sort((a, b) => a.localeCompare(b, 'de'));
-}
-
 export async function taskUsage(db: Db, taskId: string): Promise<number> {
 	const [r] = await db
 		.select({ n: sql<number>`count(*)::int` })
@@ -130,16 +96,4 @@ export async function deleteTasks(db: Db, teacherId: string, ids: string[]) {
 		.where(and(eq(task.teacherId, teacherId), inArray(task.id, ids)))
 		.returning({ id: task.id });
 	return res.length;
-}
-
-export async function addTagToTasks(db: Db, teacherId: string, ids: string[], tag: string) {
-	const t = normalizeTags([tag])[0];
-	if (!t || ids.length === 0) return;
-	await db
-		.update(task)
-		.set({
-			tags: sql`array(select distinct unnest(array_append(${task.tags}, ${t})))`,
-			updatedAt: new Date()
-		})
-		.where(and(eq(task.teacherId, teacherId), inArray(task.id, ids)));
 }

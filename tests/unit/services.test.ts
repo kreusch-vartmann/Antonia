@@ -807,3 +807,59 @@ describe('rounds, progress reset and bundled assignments', () => {
 		});
 	});
 });
+
+describe('decomposed tasks in a race', () => {
+	it('count as one task in the evaluation and show the whole calculation in the case', async () => {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const ids = await createTasks(db, t, [
+			{
+				content: {
+					format: 'arithmetic',
+					expr: { a: 8, op: '+', b: 7, gap: 'result' },
+					answer: 15,
+					decompose: 'fill'
+				}
+			}
+		]);
+		const setId = await createSet(db, t, { name: 'Zerlegung', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s] });
+		const [a] = await activeAssignmentsForChild(db, s);
+		const T = Date.now();
+		let p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		expect(p.view.current).toMatchObject({ step: 0, steps: 3 });
+		for (const [i, value] of ['2', '5', '15'].entries()) {
+			p = await act(
+				db,
+				kv,
+				s,
+				p.runId,
+				{ type: 'answer', key: p.view.current!.key, value, ms: 1000 },
+				T + 1000 * (i + 1)
+			);
+		}
+		expect(p.view.status).toBe('finished');
+		expect(p.view.result).toMatchObject({ tasks: 1, firstTry: 1, stars: 3 });
+
+		const events = await db
+			.select()
+			.from(schema.answerEvent)
+			.where(eq(schema.answerEvent.runId, p.runId));
+		expect(events.map((e) => [e.step, e.steps, e.given]).sort()).toEqual([
+			[0, 3, '2'],
+			[1, 3, '5'],
+			[2, 3, '15']
+		]);
+		const report = await studentReport(db, t, s);
+		expect(report).toMatchObject({ tasks: 1, firstTry: 1 });
+		expect(report.medianMs).toBe(3000);
+
+		const [trophy] = await listTrophies(db, s);
+		const detail = await trophyDetail(db, s, trophy.id);
+		expect(detail?.tasks.map((x) => x.text)).toEqual(['8 + 7 = 8 + 2 + 5 = 15']);
+	});
+});

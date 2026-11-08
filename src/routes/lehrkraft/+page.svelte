@@ -9,19 +9,16 @@
 
 <h1>Hallo {data.teacher.displayName}</h1>
 
-{#if data.students.length === 0 || data.taskCount === 0 || data.setCount === 0}
+{#if data.students.length === 0 || data.setCount === 0}
 	<section class="card stack">
 		<h2>Erste Schritte</h2>
 		<ol class="steps">
 			<li class:done={data.students.length > 0}>
 				<a href="/lehrkraft/kinder/neu">Kinder anlegen</a> – mit Benutzername und Passwort.
 			</li>
-			<li class:done={data.taskCount > 0}>
-				<a href="/lehrkraft/aufgaben/generator">Aufgaben erzeugen</a> (z. B. die 5er-Reihe) oder
-				<a href="/lehrkraft/aufgaben/neu">einzeln anlegen</a>.
-			</li>
 			<li class:done={data.setCount > 0}>
-				<a href="/lehrkraft/sets/neu">Aufgabenset zusammenstellen</a> und einem Kind zuweisen.
+				<a href="/lehrkraft/sets/neu">Aufgabenset erstellen</a> – Rechenart und Zahlenraum wählen, die
+				Aufgaben entstehen von selbst. Danach dem Kind zuweisen.
 			</li>
 		</ol>
 	</section>

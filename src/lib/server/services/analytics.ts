@@ -70,8 +70,9 @@ export function summarize(events: EventRow[]) {
 		list.sort((a, b) => a.seq - b.seq);
 		const first = list[0];
 		if (first.presentation !== 1) continue; // repetitions are counted via errors only
-		const ok = first.kind === 'answer' && first.correct && first.attempt === 1;
-		const finalCorrect = list.find((e) => e.correct);
+		// right on the first try in every step (tasks with several answers have several events)
+		const ok = list.every((e) => e.kind === 'answer' && e.correct && e.attempt === 1);
+		const correctMs = list.filter((e) => e.correct && e.ms != null).map((e) => e.ms as number);
 		const family = first.family ?? 'sonstige';
 		const f = fam.get(family) ?? { tasks: 0, firstTry: 0, ms: [], hint: 0, solution: 0 };
 		f.tasks++;
@@ -80,9 +81,10 @@ export function summarize(events: EventRow[]) {
 			f.firstTry++;
 			firstTry++;
 		}
-		if (finalCorrect?.ms != null) {
-			f.ms.push(finalCorrect.ms);
-			allMs.push(finalCorrect.ms);
+		if (correctMs.length > 0) {
+			const total = correctMs.reduce((x, y) => x + y, 0);
+			f.ms.push(total);
+			allMs.push(total);
 		}
 		if (list.some((e) => e.hintShown)) f.hint++;
 		if (list.some((e) => e.solutionShown)) f.solution++;

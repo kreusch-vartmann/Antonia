@@ -10,6 +10,7 @@ import type {
 	Op,
 	PartRole,
 	PresentationPart,
+	StepProgress,
 	TaskFormat
 } from './types';
 
@@ -39,7 +40,8 @@ export const arithmeticSchema = z
 		text: z.string().trim().max(500).optional(),
 		answer: int,
 		distractors: z.array(int).max(6).optional(),
-		hint: z.string().trim().max(500).optional()
+		hint: z.string().trim().max(500).optional(),
+		decompose: z.enum(['show', 'fill']).optional()
 	})
 	.superRefine((c, ctx) => {
 		if (!c.expr && !c.text) {
@@ -204,6 +206,159 @@ function additionHint(a: number, op: '+' | '-', b: number, r: number): Hint {
 	return { text: `Lege ${a} Plättchen und nimm ${b} weg.`, visual };
 }
 
+/**
+ * Split of the second number for stepwise calculation, or null if not meaningful:
+ * 8 + 7 → 2 | 5 (to the next ten), 34 + 25 → 20 | 5 (tens and ones), 15 − 7 → 5 | 2.
+ */
+export function decomposition(a: number, op: Op, b: number): [number, number] | null {
+	if (op !== '+' && op !== '-') return null;
+	if (b >= 10 && b % 10 !== 0) return [b - (b % 10), b % 10];
+	if (b < 10 && op === '+') {
+		const toTen = 10 - (a % 10);
+		if (a % 10 !== 0 && b > toTen) return [toTen, b - toTen];
+	}
+	if (b < 10 && op === '-') {
+		const ones = a % 10;
+		if (a >= 10 && ones > 0 && b > ones) return [ones, b - ones];
+	}
+	return null;
+}
+
+/** The split that applies to this task, if it has a usable `decompose` setting. */
+function splitOf(c: ArithmeticContent): [number, number] | null {
+	if (!c.decompose || !c.expr || c.expr.gap !== 'result') return null;
+	return decomposition(c.expr.a, c.expr.op, c.expr.b);
+}
+
+function stepCount(c: ArithmeticContent): number {
+	return c.decompose === 'fill' && splitOf(c) ? 3 : 1;
+}
+
+function expectedAt(c: ArithmeticContent, step = 0): number {
+	const split = stepCount(c) === 3 ? splitOf(c) : null;
+	if (!split) return c.answer;
+	return [split[0], split[1], c.answer][Math.min(Math.max(step, 0), 2)];
+}
+
+function tileVisual(a: number, op: Op, b: number): Hint['visual'] {
+	const r = computeResult(a, op, b) ?? 0;
+	const max = Math.max(a, b, r);
+	if (max > 20 || (op !== '+' && op !== '-')) return undefined;
+	return { kind: 'twenty', size: max <= 10 ? 10 : 20, a, b, op };
+}
+
+/** Hint for the first two steps of a decomposed task. */
+function stepHint(c: ArithmeticContent, step: number): Hint {
+	const { a, op, b } = c.expr!;
+	const [p1, p2] = splitOf(c)!;
+	const visual = tileVisual(a, op, b);
+	const plus = op === '+';
+	if (b >= 10) {
+		return step === 0
+			? {
+					text: `Zerlege die ${b} in Zehner und Einer: ${b} = ${p1} + ${p2}. Rechne erst mit den Zehnern.`,
+					visual
+				}
+			: { text: `Jetzt die Einer: ${plus ? '+' : '−'} ${p2}.`, visual };
+	}
+	return step === 0
+		? {
+				text: plus
+					? `Wie viel fehlt von ${a} bis zur nächsten Zehnerzahl?`
+					: `Wie viel musst du von ${a} abziehen, um auf die Zehnerzahl zu kommen?`,
+				visual
+			}
+		: { text: `Von der ${b} ist schon ${p1} verbraucht. Es bleiben ${p2}.`, visual };
+}
+
+function stepSpeech(c: ArithmeticContent, step: number): string {
+	const { a, op, b } = c.expr!;
+	const w = OP_WORD[op];
+	if (step >= 2) return `${a} ${w} ${b} ist gleich wie viel?`;
+	if (b >= 10)
+		return step === 0
+			? `Welche Zehnerzahl steckt in der ${b}?`
+			: `Und wie viele Einer hat die ${b}?`;
+	if (op === '+')
+		return step === 0
+			? `Wie viel fehlt von ${a} bis zum nächsten Zehner?`
+			: `Wie viel von der ${b} bleibt dann übrig?`;
+	return step === 0
+		? `Wie viel musst du von ${a} abziehen, um auf den Zehner zu kommen?`
+		: `Wie viel von der ${b} musst du dann noch abziehen?`;
+}
+
+function presentArithmetic(c: ArithmeticContent, progress?: StepProgress) {
+	const parts: PresentationPart[] = [];
+	const steps = stepCount(c);
+	const step = progress?.step ?? 0;
+	const solved = !!progress && step >= steps;
+	let speech = c.text ? c.text + ' ' : '';
+	// Only plus and minus are coloured (first number blue, second red).
+	const coloured = !!c.expr && (c.expr.op === '+' || c.expr.op === '-');
+	const roleA: PartRole = coloured ? 'a' : 'result';
+	const roleB: PartRole = coloured ? 'b' : 'result';
+	const num = (v: number | string, role: PartRole, split?: [string, string]): PresentationPart => ({
+		kind: 'num',
+		value: String(v),
+		role,
+		...(split ? { split } : {})
+	});
+	const sym = (value: string): PresentationPart => ({ kind: 'op', value });
+	/** The input slot: a gap now, the number when solved. */
+	const slot = (role: PartRole, value: number): PresentationPart =>
+		solved ? num(value, role) : { kind: 'gap', role };
+
+	if (c.expr) {
+		const { a, op, b, gap } = c.expr;
+		const r = computeResult(a, op, b) ?? c.answer;
+		const s = OP_SYMBOL[op];
+		const w = OP_WORD[op];
+		const split = splitOf(c);
+		if (gap === 'result' && steps === 3 && split) {
+			// 8 + 7 = 8 + □ + □ = □, one slot after the other
+			const roles: PartRole[] = ['part', 'part', 'result'];
+			const cell = (i: number): PresentationPart => {
+				if (i < step || solved) return num(progress?.filled[i] ?? expectedAt(c, i), roles[i]);
+				return i === step ? { kind: 'gap', role: roles[i] } : { kind: 'blank', role: roles[i] };
+			};
+			parts.push(
+				num(a, roleA),
+				sym(s),
+				num(b, roleB),
+				sym('='),
+				num(a, roleA),
+				sym(s),
+				cell(0),
+				sym(s),
+				cell(1),
+				sym('='),
+				cell(2)
+			);
+			speech += solved ? '' : stepSpeech(c, Math.min(step, 2));
+		} else if (gap === 'result') {
+			const shown = c.decompose === 'show' && split ? split : null;
+			parts.push(
+				num(a, roleA),
+				sym(s),
+				num(b, roleB, shown ? [String(shown[0]), String(shown[1])] : undefined),
+				sym('='),
+				slot('result', c.answer)
+			);
+			speech += `${a} ${w} ${b} ist gleich wie viel?`;
+		} else if (gap === 'a') {
+			parts.push(slot(roleA, a), sym(s), num(b, roleB), sym('='), num(r, 'result'));
+			speech += `Wie viel ${w} ${b} ist gleich ${r}?`;
+		} else {
+			parts.push(num(a, roleA), sym(s), slot(roleB, b), sym('='), num(r, 'result'));
+			speech += `${a} ${w} wie viel ist gleich ${r}?`;
+		}
+	} else {
+		parts.push(slot('result', c.answer));
+	}
+	return { question: c.text, parts, speech: speech.trim() };
+}
+
 export const arithmetic: TaskFormat<ArithmeticContent> = {
 	id: 'arithmetic',
 	label: 'Rechenaufgabe',
@@ -215,41 +370,28 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		if (c.distractors) c.distractors = [...new Set(c.distractors)].filter((d) => d !== c.answer);
 		if (!c.text) delete c.text;
 		if (!c.hint) delete c.hint;
+		if (c.decompose && !splitOf(c)) delete c.decompose;
 		return { ok: true, content: c };
 	},
 
-	present(c) {
-		const parts: PresentationPart[] = [];
-		let speech = c.text ? c.text + ' ' : '';
-		if (c.expr) {
-			const { a, op, b, gap } = c.expr;
-			const r = computeResult(a, op, b) ?? c.answer;
-			const s = OP_SYMBOL[op];
-			const w = OP_WORD[op];
-			// Only plus and minus are coloured (first number blue, second red).
-			const coloured = op === '+' || op === '-';
-			const roleA: PartRole = coloured ? 'a' : 'result';
-			const roleB: PartRole = coloured ? 'b' : 'result';
-			const num = (v: number, role: PartRole): PresentationPart => ({
-				kind: 'num',
-				value: String(v),
-				role
-			});
-			const sym = (value: string): PresentationPart => ({ kind: 'op', value });
-			if (gap === 'result') {
-				parts.push(num(a, roleA), sym(s), num(b, roleB), sym('='), { kind: 'gap', role: 'result' });
-				speech += `${a} ${w} ${b} ist gleich wie viel?`;
-			} else if (gap === 'a') {
-				parts.push({ kind: 'gap', role: roleA }, sym(s), num(b, roleB), sym('='), num(r, 'result'));
-				speech += `Wie viel ${w} ${b} ist gleich ${r}?`;
-			} else {
-				parts.push(num(a, roleA), sym(s), { kind: 'gap', role: roleB }, sym('='), num(r, 'result'));
-				speech += `${a} ${w} wie viel ist gleich ${r}?`;
-			}
-		} else {
-			parts.push({ kind: 'gap', role: 'result' });
-		}
-		return { question: c.text, parts, speech: speech.trim() };
+	present(c, progress) {
+		return presentArithmetic(c, progress);
+	},
+
+	steps(c) {
+		return stepCount(c);
+	},
+
+	expected(c, step = 0) {
+		return expectedAt(c, step);
+	},
+
+	solved(c) {
+		const n = stepCount(c);
+		const filled = Array.from({ length: n }, (_, i) => String(expectedAt(c, i)));
+		return presentArithmetic(c, { step: n, filled })
+			.parts.map((p) => (p.kind === 'blank' || p.kind === 'gap' ? '_' : p.value))
+			.join(' ');
 	},
 
 	label1(c) {
@@ -263,15 +405,17 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		return `${prefix}${a} ${s} ${b} = ?`;
 	},
 
-	check(c, given) {
-		return parseGiven(given) === c.answer;
+	check(c, given, step = 0) {
+		return parseGiven(given) === expectedAt(c, step);
 	},
 
-	solution(c) {
-		return String(c.answer);
+	solution(c, step = 0) {
+		return String(expectedAt(c, step));
 	},
 
-	hint(c) {
+	hint(c, step = 0) {
+		const n = stepCount(c);
+		if (n > 1 && step < n - 1) return stepHint(c, step);
 		const custom = c.hint?.trim();
 		let auto: Hint | null = null;
 		if (c.expr) {
@@ -302,8 +446,19 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		return auto;
 	},
 
-	distractors(c, count, rng) {
-		const x = c.answer;
+	distractors(c, count, rng, step = 0) {
+		const n = stepCount(c);
+		const x = expectedAt(c, step);
+		if (n > 1 && step < n - 1) {
+			// intermediate step: plausible numbers around the expected one
+			const near = [x + 1, x - 1, x + 2, x - 2, x + 3, x + 10].filter((d) => d >= 0 && d !== x);
+			const pool = near.slice(0, Math.max(count + 2, 4));
+			for (let i = pool.length - 1; i > 0; i--) {
+				const j = Math.floor(rng() * (i + 1));
+				[pool[i], pool[j]] = [pool[j], pool[i]];
+			}
+			return pool.slice(0, count);
+		}
 		const manual = (c.distractors ?? []).filter((d) => d !== x);
 		const cands: number[] = [];
 		if (c.expr && c.expr.gap === 'result') {
@@ -326,11 +481,18 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		return [...manual, ...pool].slice(0, count);
 	},
 
-	errorPattern(c, given) {
+	errorPattern(c, given, step = 0) {
 		const g = parseGiven(given);
 		if (g === null) return 'invalid';
-		const x = c.answer;
+		const x = expectedAt(c, step);
 		if (g === x) return null;
+		const n = stepCount(c);
+		if (n > 1 && step < n - 1) {
+			// intermediate step: only the simple patterns
+			if (Math.abs(g - x) === 1) return 'offByOne';
+			if (Math.abs(g - x) === 10) return 'offByTen';
+			return null;
+		}
 		if (c.expr) {
 			const { a, op, b, gap } = c.expr;
 			const r = computeResult(a, op, b);

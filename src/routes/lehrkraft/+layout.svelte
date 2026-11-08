@@ -7,7 +7,6 @@
 	const nav = [
 		{ href: '/lehrkraft', label: 'Übersicht', exact: true },
 		{ href: '/lehrkraft/kinder', label: 'Kinder' },
-		{ href: '/lehrkraft/aufgaben', label: 'Aufgaben' },
 		{ href: '/lehrkraft/sets', label: 'Aufgabensets' },
 		{ href: '/lehrkraft/auswertung', label: 'Auswertung' },
 		{ href: '/lehrkraft/konto', label: 'Konto' }

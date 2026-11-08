@@ -3,6 +3,7 @@
 	import {
 		arithmetic,
 		checkConsistency,
+		decomposition,
 		expectedAnswer,
 		OP_SYMBOL
 	} from '#lib/domain/formats/arithmetic.ts';
@@ -10,11 +11,9 @@
 
 	interface Props {
 		content?: ArithmeticContent;
-		tags?: string[];
-		allTags?: string[];
 	}
 
-	let { content, tags = [], allTags = [] }: Props = $props();
+	let { content }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	const c = content;
@@ -28,6 +27,10 @@
 	let text = $state(c?.text ?? '');
 	let answer = $state<number | null>(c?.answer ?? null);
 	let answerTouched = $state(!!c);
+	let decompose = $state<'' | 'show' | 'fill'>(c?.decompose ?? '');
+	const split = $derived(
+		mode !== 'text' && gap === 'result' && a !== null && b !== null ? decomposition(a, op, b) : null
+	);
 
 	const computed = $derived(
 		mode !== 'text' && a !== null && b !== null ? expectedAnswer({ a, op, b, gap }) : null
@@ -143,19 +146,16 @@
 			placeholder="Leer = automatische Hilfe"
 		/>
 	</label>
-	<label class="field">
-		<span>Schlagwörter</span>
-		<input
-			name="tags"
-			value={tags.join(', ')}
-			list="tag-list"
-			placeholder="z. B. 1x1, 5er-Reihe, Klasse 2"
-		/>
-		<small>Durch Komma getrennt.</small>
-		<datalist id="tag-list">
-			{#each allTags as t (t)}<option value={t}></option>{/each}
-		</datalist>
-	</label>
+	{#if split}
+		<label class="field">
+			<span>Zahlzerlegung</span>
+			<select name="decompose" bind:value={decompose}>
+				<option value="">keine</option>
+				<option value="show">anzeigen ({b} = {split[0]} + {split[1]})</option>
+				<option value="fill">vom Kind ausfüllen lassen</option>
+			</select>
+		</label>
+	{/if}
 
 	{#if preview}
 		<div class="preview" aria-live="polite">

@@ -11,6 +11,7 @@ import {
 import { DEFAULT_SETTINGS, type Settings } from '../settings';
 import type { RunMode } from '../modes';
 import { generateMultiplicationRow } from '../generators';
+import type { ArithmeticContent } from '../formats/types';
 
 function setup(overrides: Partial<Settings> = {}, n = 3, mode?: RunMode) {
 	const settings = { ...DEFAULT_SETTINGS, ...overrides };
@@ -24,6 +25,89 @@ function setup(overrides: Partial<Settings> = {}, n = 3, mode?: RunMode) {
 
 const key = (s: ReturnType<typeof setup>) => view(s, 0).current!.key;
 const solution = (s: ReturnType<typeof setup>) => String(s.tasks[s.current!.taskId].content.answer);
+
+function setupFill(
+	overrides: Partial<Settings> = {},
+	decompose: 'fill' | 'show' = 'fill',
+	mode?: RunMode
+) {
+	const settings = { ...DEFAULT_SETTINGS, ...overrides };
+	const content: ArithmeticContent = {
+		format: 'arithmetic',
+		expr: { a: 8, op: '+', b: 7, gap: 'result' },
+		answer: 15,
+		decompose
+	};
+	const tasks: RunTaskDef[] = [{ id: 't1', content, settings: pickTaskSettings(settings) }];
+	return createRun({ tasks, settings, seed: 7, now: 0, mode });
+}
+
+describe('decomposed tasks', () => {
+	it('"fill": 2, 5, 15 solve one task in three steps', () => {
+		const s = setupFill();
+		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 3 });
+		const r1 = answer(s, { key: key(s), value: '2', ms: 100 }, 100);
+		expect(r1.feedback).toMatchObject({ outcome: 'correct', step: true });
+		expect(s.done).toBe(0);
+		expect(view(s, 100).current).toMatchObject({ step: 1, steps: 3 });
+		answer(s, { key: key(s), value: '5', ms: 100 }, 200);
+		const r3 = answer(s, { key: key(s), value: '15', ms: 100 }, 300);
+		expect(r3.feedback).toMatchObject({ outcome: 'correct', firstTry: true });
+		expect(s.status).toBe('finished');
+		expect(s.done).toBe(1);
+		expect(s.firstTry).toBe(1);
+		expect(r3.events[0]).toMatchObject({ step: 2, steps: 3, taskId: 't1' });
+	});
+
+	it('"fill": a wrong step costs the first try but not the progress', () => {
+		const s = setupFill({ solutionAfter: 2 });
+		answer(s, { key: key(s), value: '3', ms: 100 }, 100);
+		expect(view(s, 100).current?.hint).not.toBeNull();
+		answer(s, { key: key(s), value: '2', ms: 100 }, 200);
+		// hint and solution count per step
+		expect(view(s, 200).current).toMatchObject({ step: 1, hint: null, solution: null });
+		answer(s, { key: key(s), value: '5', ms: 100 }, 300);
+		answer(s, { key: key(s), value: '15', ms: 100 }, 400);
+		expect(s.firstTry).toBe(0);
+		// a task that went wrong is repeated once
+		expect(s.status).toBe('running');
+		expect(s.total).toBe(2);
+	});
+
+	it('"fill": the solution is shown per step', () => {
+		const s = setupFill({ solutionAfter: 1 });
+		answer(s, { key: key(s), value: '9', ms: 100 }, 100);
+		expect(view(s, 100).current?.solution).toBe('2');
+		answer(s, { key: key(s), value: '2', ms: 100 }, 200);
+		expect(view(s, 200).current?.solution).toBeNull();
+	});
+
+	it('"fill" in a flawless race: a wrong step is an engine failure', () => {
+		const s = setupFill({}, 'fill', 'flawless');
+		answer(s, { key: key(s), value: '2', ms: 100 }, 100);
+		const r = answer(s, { key: key(s), value: '4', ms: 100 }, 200);
+		expect(r.feedback.failed).toBe(true);
+		expect(s.status).toBe('failed');
+	});
+
+	it('"fill" with choices offers numbers for every step', () => {
+		const s = setupFill({ answerFormat: 'choice', choiceCount: 3 });
+		const c0 = view(s, 0).current!;
+		expect(c0.presentation.choices).toHaveLength(3);
+		expect(c0.presentation.choices).toContain(2);
+		answer(s, { key: c0.key, value: '2', ms: 1 }, 1);
+		const c1 = view(s, 1).current!;
+		expect(c1.presentation.choices).toContain(5);
+		expect(c1.disabledChoices).toEqual([]);
+	});
+
+	it('"show" is a normal one-step task', () => {
+		const s = setupFill({}, 'show');
+		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 1 });
+		answer(s, { key: key(s), value: '15', ms: 1 }, 1);
+		expect(s.status).toBe('finished');
+	});
+});
 
 describe('several rounds through the set', () => {
 	it('3 rounds of 5 tasks make 15 tasks with the real task ids in the events', () => {
