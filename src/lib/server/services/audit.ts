@@ -35,5 +35,6 @@ export const AUDIT_LABELS: Record<string, string> = {
 	'student.password.reset': 'Passwort eines Kindes zurückgesetzt',
 	'student.delete': 'Kind gelöscht',
 	'student.export': 'Daten eines Kindes exportiert',
+	'assignment.progress.reset': 'Spielstand eines Kindes zurückgesetzt',
 	'results.export': 'Ergebnisse exportiert'
 };

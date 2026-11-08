@@ -9,7 +9,7 @@
 		formatSettingValue,
 		type SettingKey
 	} from '#lib/domain/settings.ts';
-	import { fullName } from '#lib/format.ts';
+	import { dateTime, fullName } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -50,6 +50,7 @@
 			selected={a.assignment.modes}
 			targetTime={a.assignment.settings.targetTime}
 			taskCount={data.taskCount}
+			rounds={data.effective.values.rounds}
 		/>
 		<SettingsEditor
 			level="assignment"
@@ -65,6 +66,32 @@
 	{#if form?.saved}<p class="success" role="status">Gespeichert.</p>{/if}
 	<div><button class="btn btn-primary">Speichern</button></div>
 </form>
+
+<section class="card stack">
+	<h2>Spielstand</h2>
+	<p class="muted small">
+		Sterne, Bestzeit und die Freischaltung von „Bestzeit jagen“ beginnen für das Kind neu. Alle
+		Rennen bleiben in der Auswertung, die Pokale bleiben in der Vitrine. Gilt für alle Zuweisungen
+		dieses Sets an {fullName(a.student)}.
+	</p>
+	<form
+		method="POST"
+		action="?/resetProgress"
+		use:enhance
+		class="row"
+		onsubmit={(e) => {
+			if (!confirm('Spielstand zurücksetzen? Die Auswertung bleibt erhalten.')) e.preventDefault();
+		}}
+	>
+		<button class="btn">Spielstand zurücksetzen</button>
+		{#if form?.progressReset}<span class="success" role="status">Zurückgesetzt.</span>{/if}
+		{#if a.assignment.progressResetAt}
+			<span class="muted small"
+				>Zuletzt zurückgesetzt: {dateTime(a.assignment.progressResetAt)}</span
+			>
+		{/if}
+	</form>
+</section>
 
 <section class="card">
 	<h2>So gilt es jetzt</h2>

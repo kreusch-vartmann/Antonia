@@ -3,12 +3,43 @@ import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { resolveSettings, sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
 import { RUN_MODES, cleanModes, type RunMode } from '#lib/domain/modes.ts';
+import { classifySet } from '#lib/domain/numberRange.ts';
+import type { TaskContent } from '#lib/domain/formats/types.ts';
 import { ValidationError } from './accounts';
 
 const { taskSet, taskSetItem, task, assignment, student } = schema;
 
+/**
+ * Only runs after the last "reset progress" of the assignment count for the child
+ * (stars, best time, unlock). The evaluation of the teacher always sees every run.
+ */
+const countsForChild = sql`${schema.run.startedAt} > coalesce(${assignment.progressResetAt}, '-infinity'::timestamptz)`;
+
+/** Best stars per assignment and race mode (only runs that count for the child). */
+async function starsByMode(db: Db, assignmentIds: string[]) {
+	const map = new Map<string, Partial<Record<RunMode, number>>>();
+	if (assignmentIds.length === 0) return map;
+	const rows = await db
+		.select({
+			assignmentId: schema.run.assignmentId,
+			mode: schema.run.mode,
+			stars: sql<number | null>`max(${schema.run.stars})`
+		})
+		.from(schema.run)
+		.innerJoin(assignment, eq(assignment.id, schema.run.assignmentId))
+		.where(and(inArray(schema.run.assignmentId, assignmentIds), countsForChild))
+		.groupBy(schema.run.assignmentId, schema.run.mode);
+	for (const r of rows) {
+		if (r.stars === null) continue;
+		const m = map.get(r.assignmentId) ?? {};
+		m[r.mode] = r.stars;
+		map.set(r.assignmentId, m);
+	}
+	return map;
+}
+
 export async function listSets(db: Db, teacherId: string) {
-	return db
+	const rows = await db
 		.select({
 			id: taskSet.id,
 			name: taskSet.name,
@@ -21,6 +52,22 @@ export async function listSets(db: Db, teacherId: string) {
 		.from(taskSet)
 		.where(and(eq(taskSet.teacherId, teacherId), eq(taskSet.archived, false)))
 		.orderBy(desc(taskSet.updatedAt));
+	const contents = new Map<string, TaskContent[]>();
+	if (rows.length > 0) {
+		const items = await db
+			.select({ setId: taskSetItem.setId, content: task.content })
+			.from(taskSetItem)
+			.innerJoin(task, eq(task.id, taskSetItem.taskId))
+			.where(
+				inArray(
+					taskSetItem.setId,
+					rows.map((r) => r.id)
+				)
+			);
+		for (const i of items) contents.set(i.setId, [...(contents.get(i.setId) ?? []), i.content]);
+	}
+	// number range and ten transition, derived from the tasks (for sorting the list)
+	return rows.map((r) => ({ ...r, range: classifySet(contents.get(r.id) ?? []) }));
 }
 
 export async function getSet(db: Db, teacherId: string, id: string) {
@@ -350,6 +397,94 @@ export async function listAssignmentsForStudent(db: Db, teacherId: string, stude
 		.orderBy(desc(assignment.createdAt));
 }
 
+export interface StudentRaceAssignment {
+	id: string;
+	startsOn: string | null;
+	endsOn: string | null;
+	archived: boolean;
+	modes: RunMode[];
+	/** Target time in seconds of the race against the clock (0 = none). */
+	targetTime: number;
+	/** Best stars per race mode since the last reset. */
+	starsByMode: Partial<Record<RunMode, number>>;
+	runs: number;
+	progressResetAt: Date | null;
+	/** The teacher may edit this assignment (it uses a set of their own). */
+	editable: boolean;
+}
+
+export interface StudentRace {
+	setId: string;
+	setName: string;
+	archived: boolean;
+	best: BestTime | null;
+	assignments: StudentRaceAssignment[];
+}
+
+/**
+ * All assignments of one child, bundled per set ("race"). The caller has to make sure
+ * that the teacher may see the child.
+ */
+export async function racesForStudent(
+	db: Db,
+	teacherId: string,
+	studentId: string
+): Promise<StudentRace[]> {
+	const rows = await db
+		.select({
+			id: assignment.id,
+			setId: taskSet.id,
+			setName: taskSet.name,
+			setOwner: taskSet.teacherId,
+			setArchived: taskSet.archived,
+			startsOn: assignment.startsOn,
+			endsOn: assignment.endsOn,
+			archived: assignment.archived,
+			modes: assignment.modes,
+			settings: assignment.settings,
+			progressResetAt: assignment.progressResetAt,
+			createdAt: assignment.createdAt,
+			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status <> 'running')`
+		})
+		.from(assignment)
+		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
+		.where(eq(assignment.studentId, studentId))
+		.orderBy(desc(assignment.createdAt));
+	const stars = await starsByMode(
+		db,
+		rows.map((r) => r.id)
+	);
+	const best = await bestTimes(db, studentId, [...new Set(rows.map((r) => r.setId))]);
+	const groups = new Map<string, StudentRace>();
+	for (const r of rows) {
+		let g = groups.get(r.setId);
+		if (!g) {
+			g = {
+				setId: r.setId,
+				setName: r.setName,
+				archived: true,
+				best: best.get(r.setId) ?? null,
+				assignments: []
+			};
+			groups.set(r.setId, g);
+		}
+		if (!r.archived && !r.setArchived) g.archived = false;
+		g.assignments.push({
+			id: r.id,
+			startsOn: r.startsOn,
+			endsOn: r.endsOn,
+			archived: r.archived,
+			modes: cleanModes(r.modes),
+			targetTime: resolveSettings({ assignment: r.settings }).values.targetTime,
+			starsByMode: stars.get(r.id) ?? {},
+			runs: r.runs,
+			progressResetAt: r.progressResetAt,
+			editable: r.setOwner === teacherId
+		});
+	}
+	return [...groups.values()];
+}
+
 export interface BestTime {
 	runId: string;
 	durationMs: number;
@@ -376,6 +511,7 @@ export async function bestTimes(
 			finishedAt: schema.run.finishedAt
 		})
 		.from(schema.run)
+		.innerJoin(assignment, eq(assignment.id, schema.run.assignmentId))
 		.where(
 			and(
 				eq(schema.run.studentId, studentId),
@@ -383,6 +519,7 @@ export async function bestTimes(
 				eq(schema.run.status, 'finished'),
 				inArray(schema.run.mode, ['flawless', 'record']),
 				sql`${schema.run.durationMs} is not null`,
+				countsForChild,
 				excludeRunId ? ne(schema.run.id, excludeRunId) : undefined
 			)
 		)
@@ -414,8 +551,8 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = "task_set"."id")`,
 			bestStars: sql<
 				number | null
-			>`(select max(stars) from run r where r.assignment_id = "assignment"."id")`,
-			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status in ('finished','timeUp'))`
+			>`(select max(stars) from run r where r.assignment_id = "assignment"."id" and r.started_at > coalesce("assignment"."progress_reset_at", '-infinity'::timestamptz))`,
+			runs: sql<number>`(select count(*)::int from run r where r.assignment_id = "assignment"."id" and r.status in ('finished','timeUp') and r.started_at > coalesce("assignment"."progress_reset_at", '-infinity'::timestamptz))`
 		})
 		.from(assignment)
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
@@ -430,28 +567,11 @@ export async function activeAssignmentsForChild(db: Db, studentId: string, today
 			)
 		)
 		.orderBy(asc(assignment.endsOn), desc(assignment.createdAt));
-	const starRows = rows.length
-		? await db
-				.select({
-					assignmentId: schema.run.assignmentId,
-					mode: schema.run.mode,
-					stars: sql<number | null>`max(${schema.run.stars})`
-				})
-				.from(schema.run)
-				.where(
-					inArray(
-						schema.run.assignmentId,
-						rows.map((r) => r.id)
-					)
-				)
-				.groupBy(schema.run.assignmentId, schema.run.mode)
-		: [];
-	const starsFor = (id: string): Partial<Record<RunMode, number>> =>
-		Object.fromEntries(
-			starRows
-				.filter((r) => r.assignmentId === id && r.stars !== null)
-				.map((r) => [r.mode, r.stars])
-		);
+	const stars = await starsByMode(
+		db,
+		rows.map((r) => r.id)
+	);
+	const starsFor = (id: string): Partial<Record<RunMode, number>> => stars.get(id) ?? {};
 	const best = await bestTimes(db, studentId, [...new Set(rows.map((r) => r.setId))]);
 	return rows.map(({ setSettings, assignmentSettings, studentSettings, allowedModes, ...a }) => {
 		const targetTime = resolveSettings({

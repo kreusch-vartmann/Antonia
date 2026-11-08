@@ -24,8 +24,10 @@ import {
 	listAssignmentsForStudent,
 	groupRaces,
 	listSets,
+	racesForStudent,
 	updateAssignment
 } from '#lib/server/services/sets.ts';
+import { resetProgress } from '#lib/server/services/progress.ts';
 import {
 	act,
 	findResumable,
@@ -681,5 +683,127 @@ describe('resuming and retrying runs', () => {
 			T + 1000
 		);
 		expect(r.feedback.outcome).toBe('correct');
+	});
+});
+
+describe('rounds, progress reset and bundled assignments', () => {
+	async function fixture(assignmentSettings = {}) {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const drafts = generateMultiplicationRow({ row: 5, from: 1, to: 3 });
+		const ids = await createTasks(
+			db,
+			t,
+			drafts.map((d) => ({ content: d.content, tags: d.tags, origin: d.origin }))
+		);
+		const setId = await createSet(db, t, { name: '5er-Reihe', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s], settings: assignmentSettings });
+		const [a] = await activeAssignmentsForChild(db, s);
+		return { t, s, a, setId };
+	}
+	async function finish(s: string, assignmentId: string, mode: RunMode, T: number) {
+		let p: RunPayload = await startOrResumeRun(db, kv, s, assignmentId, mode, T);
+		let n = 0;
+		while (p.view.status === 'running') {
+			const value = String(eval(exprText(p).replace('·', '*').replace('=', '')));
+			p = await act(
+				db,
+				kv,
+				s,
+				p.runId,
+				{ type: 'answer', key: p.view.current!.key, value, ms: 500 },
+				T + 1000 * ++n
+			);
+		}
+		return p;
+	}
+
+	it('practises all tasks twice when the assignment says so', async () => {
+		const { s, a, t } = await fixture({ rounds: 2 });
+		const T = Date.now();
+		const start = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		expect(start.view.total).toBe(6);
+		const p = await finish(s, a.id, 'normal', T);
+		expect(p.view.result).toMatchObject({ tasks: 6, firstTry: 6, stars: 3 });
+		const events = await db
+			.select()
+			.from(schema.answerEvent)
+			.where(eq(schema.answerEvent.runId, p.runId));
+		expect(events.filter((e) => e.round === 0)).toHaveLength(3);
+		expect(events.filter((e) => e.round === 1)).toHaveLength(3);
+		expect((await studentReport(db, t, s)).tasks).toBe(6);
+	});
+
+	it('resets the progress of the child only, the evaluation keeps every run', async () => {
+		const { s, a, t, setId } = await fixture();
+		const T = Date.now();
+		await finish(s, a.id, 'flawless', T);
+		await finish(s, a.id, 'normal', T + 100_000);
+		let [active] = await activeAssignmentsForChild(db, s);
+		expect(active.best).not.toBeNull();
+		expect(active.starsByMode).toMatchObject({ flawless: 3, normal: 3 });
+
+		// a run in progress is stopped, too
+		const open = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 200_000);
+		await resetProgress(db, kv, t, s, setId, new Date(T + 300_000));
+		[active] = await activeAssignmentsForChild(db, s);
+		expect(active.best).toBeNull();
+		expect(active.bestStars).toBeNull();
+		expect(active.runs).toBe(0);
+		expect(active.starsByMode).toEqual({});
+		await expect(startOrResumeRun(db, kv, s, a.id, 'record', T + 310_000)).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		const [stopped] = await db.select().from(schema.run).where(eq(schema.run.id, open.runId));
+		expect(stopped.status).toBe('aborted');
+
+		// trophies and evaluation stay
+		expect(await listTrophies(db, s)).toHaveLength(2);
+		expect((await studentReport(db, t, s)).runs.length).toBeGreaterThanOrEqual(2);
+
+		// a new run counts again
+		await finish(s, a.id, 'flawless', T + 400_000);
+		[active] = await activeAssignmentsForChild(db, s);
+		expect(active.best).not.toBeNull();
+		expect(active.starsByMode).toMatchObject({ flawless: 3 });
+		expect(active.starsByMode.normal).toBeUndefined();
+	});
+
+	it('only the teacher of the child may reset the progress', async () => {
+		const { s, setId } = await fixture();
+		const other = await teacher('lehrer.b');
+		await expect(resetProgress(db, kv, other, s, setId)).rejects.toBeInstanceOf(ValidationError);
+	});
+
+	it('bundles all assignments of a child per set', async () => {
+		const { s, t, setId } = await fixture();
+		await assign(db, t, { setId, studentIds: [s], settings: { targetTime: 90 }, modes: ['time'] });
+		const races = await racesForStudent(db, t, s);
+		expect(races).toHaveLength(1);
+		expect(races[0]).toMatchObject({ setName: '5er-Reihe', archived: false });
+		expect(races[0].assignments).toHaveLength(2);
+		expect(races[0].assignments.every((a) => a.editable)).toBe(true);
+		expect(races[0].assignments.map((a) => a.targetTime).sort()).toEqual([0, 90]);
+	});
+
+	it('sorts sets by number range', async () => {
+		const { t } = await fixture();
+		const add = await createTasks(db, t, [
+			{
+				content: { format: 'arithmetic', expr: { a: 8, op: '+', b: 7, gap: 'result' }, answer: 15 }
+			}
+		]);
+		await createSet(db, t, { name: 'Plus mit Übergang', taskIds: add });
+		await createSet(db, t, { name: 'Leer' });
+		const sets = await listSets(db, t);
+		expect(Object.fromEntries(sets.map((x) => [x.name, x.range]))).toEqual({
+			'5er-Reihe': 'mult',
+			'Plus mit Übergang': 'zr20-with',
+			Leer: 'empty'
+		});
 	});
 });

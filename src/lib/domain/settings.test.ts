@@ -52,7 +52,7 @@ describe('settings inheritance', () => {
 
 	it('lists the settings of a level', () => {
 		expect(keysForLevel('assignment').sort()).toEqual(
-			['order', 'targetTime', 'tasksPerRun'].sort()
+			['order', 'rounds', 'targetTime', 'tasksPerRun'].sort()
 		);
 		expect(keysForLevel('student')).toContain('readAloud');
 		expect(keysForLevel('set')).not.toContain('readAloud');

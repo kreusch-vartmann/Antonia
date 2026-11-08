@@ -46,10 +46,10 @@ export interface FamilyStat {
 }
 
 export function summarize(events: EventRow[]) {
-	// Group by presentation (run, task, presentation)
+	// Group by presentation (run, task, round, presentation)
 	const pres = new Map<string, EventRow[]>();
 	for (const e of events) {
-		const k = `${e.runId}|${e.taskId ?? JSON.stringify(e.taskSnapshot)}|${e.presentation}`;
+		const k = `${e.runId}|${e.taskId ?? JSON.stringify(e.taskSnapshot)}|${e.round}|${e.presentation}`;
 		const list = pres.get(k) ?? [];
 		list.push(e);
 		pres.set(k, list);

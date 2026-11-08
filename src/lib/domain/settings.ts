@@ -37,6 +37,8 @@ export const settingsSchema = z.object({
 	order: z.enum(['fixed', 'shuffle']),
 	/** Max tasks per run (0 = all tasks of the set). */
 	tasksPerRun: z.number().int().min(0).max(200),
+	/** How often all tasks of the set are practised in one run. */
+	rounds: z.number().int().min(1).max(3),
 	/** Read aloud: off, button, automatically. */
 	readAloud: z.enum(['off', 'button', 'auto']),
 	/** Sound effects. */
@@ -65,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	showTimer: true,
 	order: 'fixed',
 	tasksPerRun: 0,
+	rounds: 1,
 	readAloud: 'button',
 	sound: true,
 	calm: false,
@@ -224,6 +227,19 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 			)
 		],
 		formatNumber: (n) => `${n} Aufgaben`,
+		group: 'Antworten',
+		levels: ['set', 'assignment']
+	},
+	rounds: {
+		label: 'Wie oft alle Aufgaben',
+		help: 'Bei 3× und 5 Aufgaben fährt das Kind 15 Aufgaben.',
+		type: 'enum',
+		options: [
+			{ value: '1', label: 'Einmal' },
+			{ value: '2', label: '2× alle Aufgaben' },
+			{ value: '3', label: '3× alle Aufgaben' }
+		],
+		formatNumber: (n) => `${n}× alle Aufgaben`,
 		group: 'Antworten',
 		levels: ['set', 'assignment']
 	},

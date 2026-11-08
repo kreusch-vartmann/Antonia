@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { db, requireTeacher } from '#lib/server/auth/guard.ts';
+import { db, kv, requireTeacher } from '#lib/server/auth/guard.ts';
+import { resetProgress } from '#lib/server/services/progress.ts';
 import {
 	deleteAssignment,
 	getAssignmentForTeacher,
@@ -39,6 +40,15 @@ export const actions: Actions = {
 				modes: cleanModes(strs(form, 'mode'))
 			});
 			return { saved: true };
+		});
+	},
+	resetProgress: async (event) => {
+		const teacherId = requireTeacher(event);
+		const a = await getAssignmentForTeacher(db(), teacherId, event.params.id);
+		if (!a) error(404, 'Nicht gefunden');
+		return guarded(async () => {
+			await resetProgress(db(), kv(), teacherId, a.student.id, a.set.id);
+			return { progressReset: true };
 		});
 	},
 	delete: async (event) => {

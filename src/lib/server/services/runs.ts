@@ -3,7 +3,7 @@ import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import type { Kv } from '../kv/types';
 import { resolveSettings, type Settings } from '#lib/domain/settings.ts';
-import { isFlawlessMode, trophyFor, type RunMode } from '#lib/domain/modes.ts';
+import { RUN_MODES, isFlawlessMode, trophyFor, type RunMode } from '#lib/domain/modes.ts';
 import {
 	abort,
 	answer,
@@ -279,6 +279,7 @@ async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) 
 			correct: e.correct,
 			attempt: e.attempt,
 			presentation: e.presentation,
+			round: e.round,
 			hintShown: e.hintShown,
 			solutionShown: e.solutionShown,
 			ms: e.ms,
@@ -402,6 +403,21 @@ export async function getRunPayload(
 	if (!s || s.studentId !== studentId) return null;
 	if (s.engine.status === 'running' && tick(s.engine, now)) await persistEnd(db, kv, s);
 	return payload(db, s, now);
+}
+
+/** Aborts all runs of an assignment that are still going on (e.g. after the progress was reset). */
+export async function abortActiveRuns(db: Db, kv: Kv, assignmentId: string, now = Date.now()) {
+	for (const mode of RUN_MODES) {
+		const id = await kv.get(activeKey(assignmentId, mode));
+		if (!id) continue;
+		const s = await load(kv, id);
+		if (s && s.engine.status === 'running') {
+			abort(s.engine, now);
+			await persistEnd(db, kv, s);
+		} else {
+			await kv.del(activeKey(assignmentId, mode));
+		}
+	}
 }
 
 /** Marks runs as aborted that were left open (e.g. Redis state expired). */

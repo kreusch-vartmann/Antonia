@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { ArithmeticContent, Gap, Op, TaskOrigin } from './formats/types';
 import { computeResult, expectedAnswer } from './formats/arithmetic';
+import { crossesTen } from './numberRange';
 import { rng as makeRng, shuffle } from './random';
 
 export interface TaskDraft {
@@ -98,10 +99,6 @@ export function generateDivisionRow(input: unknown): TaskDraft[] {
 		out.push(make(k * p.row, ':', p.row, gap, tags, 'divisionRow', p));
 	}
 	return p.shuffle ? shuffle(out, r) : out;
-}
-
-function crossesTen(a: number, op: '+' | '-', b: number) {
-	return op === '+' ? (a % 10) + (b % 10) >= 10 : a % 10 < b % 10;
 }
 
 export function generateAddSub(input: unknown): TaskDraft[] {

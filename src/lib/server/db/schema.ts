@@ -149,6 +149,8 @@ export const assignment = pgTable(
 			.$type<RunMode[]>()
 			.notNull()
 			.default(['normal', 'flawless', 'time']),
+		/** Child-facing progress (stars, best time, unlock) only counts runs started after this. */
+		progressResetAt: timestamp('progress_reset_at', { withTimezone: true }),
 		archived: boolean('archived').notNull().default(false),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
@@ -237,6 +239,11 @@ export const answerEvent = pgTable(
 		attempt: integer('attempt').notNull(),
 		/** Presentation number of this task within the run (1 = first time). */
 		presentation: integer('presentation').notNull().default(1),
+		/** Pass through the whole set (0 = first), when the set is practised several times. */
+		round: integer('round').notNull().default(0),
+		/** Step of a multi-step task (decomposition): 0-based, and the number of steps. */
+		step: integer('step').notNull().default(0),
+		steps: integer('steps').notNull().default(1),
 		hintShown: boolean('hint_shown').notNull().default(false),
 		solutionShown: boolean('solution_shown').notNull().default(false),
 		ms: integer('ms'),

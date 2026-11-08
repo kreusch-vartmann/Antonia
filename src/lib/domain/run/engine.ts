@@ -20,12 +20,17 @@ export interface RunTaskDef {
 	id: string;
 	content: TaskContent;
 	settings: TaskSettings;
+	/** Key of this appearance in the run; the task id, or "<id>~<round>" in later rounds. */
+	slot?: string;
+	/** Pass through the set (0 = first). */
+	round?: number;
 }
 
 /** `failed`: engine failure in a flawless race (a mistake was made). */
 export type RunStatus = 'running' | 'finished' | 'timeUp' | 'aborted' | 'failed';
 
 interface Current {
+	/** Slot key of the task in this run (see RunTaskDef.slot). */
 	taskId: string;
 	presentation: number;
 	/** Wrong attempts in this presentation. */
@@ -48,8 +53,9 @@ export interface RunState {
 	finishedAt?: number;
 	status: RunStatus;
 	settings: Settings;
+	/** Tasks by slot key. */
 	tasks: Record<string, RunTaskDef>;
-	/** Number of distinct tasks in this run. */
+	/** Number of tasks to solve in this run (every appearance counts, repeats for mistakes do not). */
 	uniqueTasks: number;
 	queue: string[];
 	current: Current | null;
@@ -67,6 +73,7 @@ export interface AnswerEventDraft {
 	taskSnapshot: TaskContent;
 	family: string;
 	seq: number;
+	round: number;
 	kind: 'answer' | 'timeout';
 	given: string | null;
 	correct: boolean;
@@ -184,10 +191,23 @@ export function createRun(opts: {
 	let list = opts.tasks;
 	if (settings.order === 'shuffle') list = shuffle(list, random(state));
 	if (settings.tasksPerRun > 0) list = list.slice(0, settings.tasksPerRun);
-	for (const t of list) state.tasks[t.id] = t;
-	state.queue = list.map((t) => t.id);
-	state.uniqueTasks = list.length;
-	state.total = list.length;
+	// Practise all tasks several times: every pass gets its own slots.
+	const slots: RunTaskDef[] = [];
+	const rounds = Math.max(1, settings.rounds ?? 1);
+	for (let r = 0; r < rounds; r++) {
+		let pass = list;
+		if (r > 0 && settings.order === 'shuffle') {
+			pass = shuffle(list, random(state));
+			// never the same task twice in a row at the border of two passes
+			if (pass.length > 1 && pass[0].id === slots[slots.length - 1].id)
+				pass = [...pass.slice(1), pass[0]];
+		}
+		for (const t of pass) slots.push({ ...t, slot: r === 0 ? t.id : `${t.id}~${r}`, round: r });
+	}
+	for (const t of slots) state.tasks[t.slot!] = t;
+	state.queue = slots.map((t) => t.slot!);
+	state.uniqueTasks = slots.length;
+	state.total = slots.length;
 	advance(state, opts.now);
 	return state;
 }
@@ -266,8 +286,9 @@ function eventBase(
 	const def = state.tasks[cur.taskId];
 	state.seq += 1;
 	return {
-		taskId: cur.taskId,
+		taskId: def.id,
 		taskSnapshot: def.content,
+		round: def.round ?? 0,
 		family: formatOf(def.content).family(def.content),
 		seq: state.seq,
 		attempt: cur.wrong + 1,
@@ -380,7 +401,7 @@ export function timeout(state: RunState, input: { key: string }, now: number): S
 		const timeouts = cur.timeouts;
 		advance(state, now);
 		// Keep the timeout count if the same task comes right back.
-		if (state.current && state.current.taskId === def.id) state.current.timeouts = timeouts;
+		if (state.current && state.current.taskId === cur.taskId) state.current.timeouts = timeouts;
 	}
 	return { state, feedback: { outcome: 'timeout' }, events: [event] };
 }

@@ -7,7 +7,8 @@ import {
 	resetStudentPassword,
 	updateStudent
 } from '#lib/server/services/students.ts';
-import { listAssignmentsForStudent } from '#lib/server/services/sets.ts';
+import { racesForStudent } from '#lib/server/services/sets.ts';
+import { resetProgress } from '#lib/server/services/progress.ts';
 import { guarded, isUuid, str } from '#lib/server/forms.ts';
 import { layerFromForm } from '#lib/domain/settings.ts';
 import { kidPassword } from '#lib/server/auth/password.ts';
@@ -23,7 +24,7 @@ export const load: PageServerLoad = async (event) => {
 	delete safe.passwordHash;
 	return {
 		student: safe as Omit<typeof student, 'passwordHash'>,
-		assignments: await listAssignmentsForStudent(db(), teacherId, student.id),
+		races: await racesForStudent(db(), teacherId, student.id),
 		suggestedPassword: kidPassword()
 	};
 };
@@ -52,6 +53,15 @@ export const actions: Actions = {
 			await resetStudentPassword(db(), teacherId, event.params.id, password);
 			await destroyAllSessions(kv(), 'student', event.params.id);
 			return { newPassword: password };
+		});
+	},
+	resetProgress: async (event) => {
+		const teacherId = requireTeacher(event);
+		const setId = str(await event.request.formData(), 'setId');
+		if (!isUuid(setId)) return fail(400, { error: 'Unbekanntes Set.' });
+		return guarded(async () => {
+			await resetProgress(db(), kv(), teacherId, event.params.id, setId);
+			return { progressReset: setId };
 		});
 	},
 	logoutAll: async (event) => {

@@ -17,9 +17,16 @@
 		targetTime?: number;
 		/** Number of tasks in the set, for a suggestion of the target time. */
 		taskCount?: number;
+		/** How often all tasks are practised in one run. */
+		rounds?: number;
 	}
 
-	let { selected = ['normal', 'flawless'], targetTime, taskCount = 0 }: Props = $props();
+	let {
+		selected = ['normal', 'flawless'],
+		targetTime,
+		taskCount = 0,
+		rounds = 1
+	}: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let timeChecked = $state(selected.includes('time'));
@@ -35,8 +42,9 @@
 
 	const QUICK = [60, 90, 120, 180, 300];
 	// about 12 seconds per task, rounded to 15 seconds
+	const runTasks = $derived(taskCount * rounds);
 	const suggestion = $derived(
-		taskCount > 0 ? Math.max(30, Math.round((taskCount * 12) / 15) * 15) : 0
+		runTasks > 0 ? Math.max(30, Math.round((runTasks * 12) / 15) * 15) : 0
 	);
 
 	function set(totalSeconds: number) {
@@ -101,7 +109,7 @@
 				</span>
 				{#if suggestion > 0}
 					<p class="muted small">
-						Vorschlag für {taskCount} Aufgaben (ca. 12 s pro Aufgabe):
+						Vorschlag für {runTasks} Aufgaben (ca. 12 s pro Aufgabe):
 						<button type="button" class="link" onclick={() => set(suggestion)}
 							>{clock(suggestion * 1000)} übernehmen</button
 						>

@@ -51,7 +51,7 @@ export async function trophyDetail(db: Db, studentId: string, trophyId: string) 
 
 	const tasks = new Map<string, TrophyTask>();
 	for (const e of events) {
-		const key = e.taskId ?? JSON.stringify(e.taskSnapshot);
+		const key = `${e.round}|${e.taskId ?? JSON.stringify(e.taskSnapshot)}`;
 		let task = tasks.get(key);
 		if (!task) {
 			const fmt = formatOf(e.taskSnapshot);

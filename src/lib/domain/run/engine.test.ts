@@ -25,6 +25,52 @@ function setup(overrides: Partial<Settings> = {}, n = 3, mode?: RunMode) {
 const key = (s: ReturnType<typeof setup>) => view(s, 0).current!.key;
 const solution = (s: ReturnType<typeof setup>) => String(s.tasks[s.current!.taskId].content.answer);
 
+describe('several rounds through the set', () => {
+	it('3 rounds of 5 tasks make 15 tasks with the real task ids in the events', () => {
+		const s = setup({ rounds: 3 }, 5);
+		expect(s.total).toBe(15);
+		expect(s.uniqueTasks).toBe(15);
+		const ids: string[] = [];
+		const rounds: number[] = [];
+		for (let i = 0; i < 15; i++) {
+			expect(s.status).toBe('running');
+			const r = answer(s, { key: key(s), value: solution(s), ms: 100 }, 100 * (i + 1));
+			ids.push(r.events[0].taskId);
+			rounds.push(r.events[0].round);
+		}
+		expect(s.status).toBe('finished');
+		expect(ids).toEqual(Array.from({ length: 15 }, (_, i) => `t${(i % 5) + 1}`));
+		expect(rounds).toEqual([0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2]);
+		expect(view(s, 2000).result).toMatchObject({ tasks: 15, firstTry: 15, stars: 3 });
+	});
+
+	it('shuffles every round and never repeats a task directly at the border of two rounds', () => {
+		for (let seed = 1; seed <= 40; seed++) {
+			const settings = { ...DEFAULT_SETTINGS, rounds: 2, order: 'shuffle' as const };
+			const tasks: RunTaskDef[] = generateMultiplicationRow({ row: 5, from: 1, to: 4 }).map(
+				(d, i) => ({ id: `t${i}`, content: d.content, settings: pickTaskSettings(settings) })
+			);
+			const s = createRun({ tasks, settings, seed, now: 0 });
+			const order = [s.current!.taskId, ...s.queue].map((k) => s.tasks[k].id);
+			expect(new Set(order.slice(0, 4)).size).toBe(4);
+			expect(new Set(order.slice(4)).size).toBe(4);
+			expect(order[3]).not.toBe(order[4]);
+		}
+	});
+
+	it('repeating a wrongly solved task still works in a later round', () => {
+		const s = setup({ rounds: 2, solutionAfter: 1 }, 2);
+		for (let i = 0; i < 2; i++) answer(s, { key: key(s), value: solution(s), ms: 1 }, 10 + i);
+		// round 2, first task: wrong, then the solution is shown and typed in
+		answer(s, { key: key(s), value: '0', ms: 1 }, 20);
+		answer(s, { key: key(s), value: solution(s), ms: 1 }, 21);
+		expect(s.total).toBe(5);
+		answer(s, { key: key(s), value: solution(s), ms: 1 }, 22);
+		answer(s, { key: key(s), value: solution(s), ms: 1 }, 23);
+		expect(s.status).toBe('finished');
+	});
+});
+
 describe('run engine', () => {
 	it('finishes with 3 stars when everything is right on the first try', () => {
 		const s = setup();

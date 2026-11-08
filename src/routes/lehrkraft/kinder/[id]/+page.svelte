@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import StudentFields from '#lib/components/StudentFields.svelte';
-	import { MODE_LABEL } from '#lib/domain/modes.ts';
-	import { date, fullName, stars } from '#lib/format.ts';
+	import { MODE_LABEL, clock, clockPrecise } from '#lib/domain/modes.ts';
+	import { date, dateTime, fullName, stars } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -43,42 +43,82 @@
 </section>
 
 <section class="card stack">
-	<h2>Zuweisungen</h2>
-	{#if data.assignments.length === 0}
+	<h2>Rennen</h2>
+	{#if data.races.length === 0}
 		<p class="muted">
 			Noch keine Aufgabensets zugewiesen. <a href="/lehrkraft/sets">Zu den Sets</a>
 		</p>
 	{:else}
-		<div class="table-wrap">
-			<table>
-				<thead
-					><tr
-						><th>Set</th><th>Zeitraum</th><th>Rennarten</th><th class="num">Rennen</th><th>Beste</th
-						><th></th></tr
-					></thead
-				>
-				<tbody>
-					{#each data.assignments as a (a.id)}
-						<tr class:archived={a.archived}>
-							<td
-								><a href="/lehrkraft/sets/{a.setId}">{a.setName}</a>{a.archived
-									? ' (beendet)'
-									: ''}</td
-							>
-							<td
-								>{a.startsOn ? date(a.startsOn) : 'ab sofort'} – {a.endsOn
+		{#each data.races as race (race.setId)}
+			{@const resetAt = race.assignments
+				.map((a) => a.progressResetAt)
+				.filter((d) => d !== null)
+				.sort()
+				.at(-1)}
+			<article class="race" class:archived={race.archived}>
+				<header class="spread">
+					<h3>
+						<a href="/lehrkraft/sets/{race.setId}">{race.setName}</a>{race.archived
+							? ' (beendet)'
+							: ''}
+					</h3>
+					{#if race.best}
+						<span class="muted"
+							>Bestzeit: <strong>{clockPrecise(race.best.durationMs)}</strong></span
+						>
+					{/if}
+				</header>
+				<ul class="assignments">
+					{#each race.assignments as a (a.id)}
+						<li class:archived={a.archived}>
+							<span class="period">
+								{a.startsOn ? date(a.startsOn) : 'ab sofort'} – {a.endsOn
 									? date(a.endsOn)
-									: 'offen'}</td
-							>
-							<td>{a.modes.map((m) => MODE_LABEL[m]).join(', ')}</td>
-							<td class="num">{a.runs}</td>
-							<td>{stars(a.bestStars)}</td>
-							<td><a class="btn small" href="/lehrkraft/zuweisungen/{a.id}">Einstellungen</a></td>
-						</tr>
+									: 'offen'}
+								{a.archived ? '(beendet)' : ''}
+							</span>
+							<span class="chips">
+								{#each a.modes as m (m)}
+									<span class="tag">
+										{MODE_LABEL[m]}{m === 'time' && a.targetTime > 0
+											? ` ${clock(a.targetTime * 1000)}`
+											: ''}
+										{#if m !== 'record'}{stars(a.starsByMode[m])}{/if}
+									</span>
+								{/each}
+							</span>
+							<span class="muted">{a.runs} Rennen</span>
+							{#if a.editable}
+								<a class="btn small" href="/lehrkraft/zuweisungen/{a.id}">Einstellungen</a>
+							{/if}
+						</li>
 					{/each}
-				</tbody>
-			</table>
-		</div>
+				</ul>
+				<form
+					method="POST"
+					action="?/resetProgress"
+					use:enhance
+					class="row"
+					onsubmit={(e) => {
+						if (
+							!confirm(
+								`Spielstand für „${race.setName}“ zurücksetzen? Sterne und Bestzeit beginnen für das Kind neu. Die Auswertung bleibt erhalten.`
+							)
+						)
+							e.preventDefault();
+					}}
+				>
+					<input type="hidden" name="setId" value={race.setId} />
+					<button class="btn small">Spielstand zurücksetzen</button>
+					{#if resetAt}
+						<span class="muted small">Zuletzt zurückgesetzt: {dateTime(resetAt)}</span>
+					{/if}
+					{#if form?.progressReset === race.setId}
+						<span class="success" role="status">Zurückgesetzt.</span>
+					{/if}
+				</form>
+			</article>
+		{/each}
 	{/if}
 </section>
 
@@ -134,6 +174,38 @@
 	}
 	.archived {
 		color: var(--color-muted);
+	}
+	.race {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		padding: var(--space-3) var(--space-4);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.race h3 {
+		margin: 0;
+	}
+	.assignments {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+	.assignments li {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		align-items: center;
+		border-top: 1px solid var(--color-border);
+		padding-top: var(--space-2);
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
 	}
 	.del {
 		margin-top: var(--space-3);

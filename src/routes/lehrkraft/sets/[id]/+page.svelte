@@ -165,7 +165,7 @@
 				<label class="field"><span>Bis (optional)</span><input type="date" name="endsOn" /></label>
 			</div>
 			{#key pickerKey}
-				<ModePicker taskCount={data.items.length} />
+				<ModePicker taskCount={data.items.length} rounds={forAssignment.values.rounds} />
 			{/key}
 			<SettingsEditor
 				level="assignment"
