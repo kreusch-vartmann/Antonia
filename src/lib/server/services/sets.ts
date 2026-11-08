@@ -6,6 +6,7 @@ import { RUN_MODES, cleanModes, type RunMode } from '#lib/domain/modes.ts';
 import { classifySet } from '#lib/domain/numberRange.ts';
 import type { TaskContent } from '#lib/domain/formats/types.ts';
 import { ValidationError } from './accounts';
+import { canSeeStudent } from './access';
 
 const { taskSet, taskSetItem, task, assignment, student } = schema;
 
@@ -327,7 +328,7 @@ export async function assign(
 	const owned = await db
 		.select({ id: student.id })
 		.from(student)
-		.where(and(eq(student.teacherId, teacherId), inArray(student.id, ids)));
+		.where(and(canSeeStudent(teacherId), inArray(student.id, ids)));
 	if (owned.length !== ids.length) throw new ValidationError('Unbekanntes Kind.');
 	await db.insert(assignment).values(
 		ids.map((studentId) => ({

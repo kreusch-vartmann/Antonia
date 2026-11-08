@@ -1,4 +1,5 @@
 import type { Actions, PageServerLoad } from './$types';
+import { APP_SECRET } from '$app/env/private';
 import { db, requireTeacher } from '#lib/server/auth/guard.ts';
 import { createStudent } from '#lib/server/services/students.ts';
 import { guarded, str } from '#lib/server/forms.ts';
@@ -23,11 +24,12 @@ export const actions: Actions = {
 		};
 		const password = str(form, 'password');
 		return guarded(async () => {
-			const id = await createStudent(db(), teacherId, {
-				...values,
-				password,
-				settings: layerFromForm(form)
-			});
+			const id = await createStudent(
+				db(),
+				teacherId,
+				{ ...values, password, settings: layerFromForm(form) },
+				APP_SECRET
+			);
 			return { created: { id, username: values.username.trim().toLowerCase(), password } };
 		}, values);
 	}

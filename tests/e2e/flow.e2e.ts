@@ -101,8 +101,18 @@ test('child races and finishes', async ({ page }) => {
 	await expect(page.getByLabel('2 von 3 Sternen')).toBeVisible();
 	await expect(page.getByText('bronzenen Pokal')).toBeVisible();
 
+	// "Nochmal fahren" counts down and starts a new run; stopping it leads back to the overview
+	await page.getByRole('button', { name: 'Nochmal fahren' }).click();
+	await expect(page.getByText('1 · 5 =')).toBeVisible({ timeout: 15_000 });
+	await page.getByRole('button', { name: 'Aufhören' }).click();
+	await expect(page.getByText('Möchtest du aufhören?')).toBeVisible();
+	await page.getByRole('button', { name: 'Weiterfahren' }).click();
+	await page.getByRole('button', { name: 'Aufhören' }).click();
+	await page.getByRole('button', { name: 'Aufhören' }).click();
+	await expect(page).toHaveURL(/\/ueben$/);
+
 	// the trophy is in the display case, with the name of the set
-	await page.getByRole('link', { name: 'Zur Vitrine' }).click();
+	await page.getByRole('link', { name: 'Vitrine' }).click();
 	await expect(page.getByRole('heading', { name: 'Deine Vitrine' })).toBeVisible();
 	await expect(page.getByRole('img', { name: 'Bronzener Pokal' })).toBeVisible();
 	await expect(page.getByText('Einmaleins 5er-Reihe')).toBeVisible();
@@ -137,4 +147,42 @@ test('teacher sees the evaluation', async ({ page }) => {
 	await a11y(page);
 	const csv = await page.request.get('/lehrkraft/auswertung/export');
 	expect(await csv.text()).toContain('1 · 5 = ?');
+});
+
+test('teacher sees the password again, prints access cards and manages accounts', async ({
+	page,
+	browser
+}) => {
+	await page.goto('/login');
+	await page.getByLabel('Benutzername').fill(TEACHER.username);
+	await page.getByLabel('Passwort', { exact: true }).fill(TEACHER.password);
+	await page.getByRole('button', { name: 'Anmelden' }).click();
+	await expect(page.getByRole('heading', { name: /Hallo/ })).toBeVisible();
+
+	// the password of a child stays visible for its teacher
+	await page.goto('/lehrkraft/kinder');
+	await page.getByRole('link', { name: 'Testkind' }).first().click();
+	await page.getByRole('button', { name: 'Anzeigen' }).click();
+	await expect(page.getByText(kidPassword)).toBeVisible();
+
+	// access card: password and QR code
+	await page.goto('/lehrkraft/kinder/karten');
+	await expect(page.getByText(kidPassword)).toBeVisible();
+	await expect(page.getByRole('img', { name: 'QR-Code zur Anmeldeseite' })).toBeVisible();
+	if (shots) await page.screenshot({ path: `${shots}/09-cards.png`, fullPage: true });
+	await a11y(page);
+
+	// the QR code opens the login page with the user name filled in
+	const ctx = await browser.newContext();
+	const guest = await ctx.newPage();
+	await guest.goto('/login?u=testkind');
+	await expect(guest.getByLabel('Benutzername')).toHaveValue('testkind');
+	await ctx.close();
+
+	// the first account is the admin
+	await page.getByRole('link', { name: 'Verwaltung' }).click();
+	await expect(page.getByRole('heading', { name: 'Verwaltung der Lehrkräfte' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: TEACHER.username })).toBeVisible();
+	if (shots) await page.screenshot({ path: `${shots}/10-admin.png`, fullPage: true });
+	await a11y(page);
 });

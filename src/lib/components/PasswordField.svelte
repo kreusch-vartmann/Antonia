@@ -10,6 +10,8 @@
 		hint?: string;
 		/** Tells password managers not to offer to save this field (e.g. one-time tokens). */
 		ignoreManagers?: boolean;
+		/** Puts the cursor into the field (e.g. when the user name is already known). */
+		autofocus?: boolean;
 	}
 
 	let {
@@ -19,7 +21,8 @@
 		required = true,
 		minlength,
 		hint,
-		ignoreManagers = false
+		ignoreManagers = false,
+		autofocus = false
 	}: Props = $props();
 
 	let shown = $state(false);
@@ -28,7 +31,9 @@
 <div class="field">
 	<label for="pw-{name}"><span>{label}</span></label>
 	<div class="wrap">
+		<!-- svelte-ignore a11y_autofocus -->
 		<input
+			{autofocus}
 			id="pw-{name}"
 			{name}
 			type={shown ? 'text' : 'password'}

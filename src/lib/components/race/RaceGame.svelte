@@ -385,7 +385,7 @@
 				><Icon name="clock" /> {Math.max(0, Math.ceil(runRemaining / 1000))} s</span
 			>
 		{/if}
-		{#if view.status === 'running'}
+		{#if view.status === 'running' && !confirmExit}
 			<IconButton icon="stop" label="Aufhören" onclick={() => (confirmExit = true)} />
 		{/if}
 	</header>

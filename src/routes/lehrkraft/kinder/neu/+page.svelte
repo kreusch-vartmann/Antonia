@@ -15,14 +15,13 @@
 	<div class="card stack">
 		<p class="success">Das Kind wurde angelegt.</p>
 		<p>
-			Zugangsdaten – bitte jetzt notieren oder <a href="/lehrkraft/kinder/karten">Karte drucken</a>:
+			Zugangsdaten – du kannst sie jederzeit wieder ansehen und <a
+				href="/lehrkraft/kinder/karten?id={form.created.id}">eine Karte drucken</a
+			>:
 		</p>
 		<p class="creds">
 			Benutzername: <strong>{form.created.username}</strong><br />
 			Passwort: <strong>{form.created.password}</strong>
-		</p>
-		<p class="muted small">
-			Das Passwort wird nur jetzt angezeigt. Du kannst es später jederzeit zurücksetzen.
 		</p>
 		<div class="row">
 			<a class="btn btn-primary" href="/lehrkraft/kinder/{form.created.id}">Zum Kind</a>

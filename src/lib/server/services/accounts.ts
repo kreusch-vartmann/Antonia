@@ -66,9 +66,11 @@ export async function createTeacher(
 	if (problem) throw new ValidationError(problem, 'password');
 	if (await isUsernameTaken(db, username))
 		throw new ValidationError('Benutzername ist vergeben.', 'username');
+	// the very first account manages the others
+	const role = (await teacherCount(db)) === 0 ? 'admin' : 'teacher';
 	const [row] = await db
 		.insert(teacher)
-		.values({ username, displayName, passwordHash: await hashPassword(input.password) })
+		.values({ username, displayName, role, passwordHash: await hashPassword(input.password) })
 		.returning({ id: teacher.id });
 	await audit(db, row.id, 'teacher.create', 'teacher', row.id);
 	return row.id;
@@ -92,7 +94,12 @@ export async function login(
 	if (locked) return { ok: false, error: 'locked', retryAfter: locked };
 
 	const [t] = await db
-		.select({ id: teacher.id, hash: teacher.passwordHash, totp: teacher.totpSecretEnc })
+		.select({
+			id: teacher.id,
+			hash: teacher.passwordHash,
+			totp: teacher.totpSecretEnc,
+			active: teacher.active
+		})
 		.from(teacher)
 		.where(eq(teacher.username, u));
 	const [s] = t
@@ -106,7 +113,8 @@ export async function login(
 	const valid = user
 		? await verifyPassword(user.hash, input.password)
 		: await dummyVerify(input.password);
-	if (!user || !valid) {
+	// a deactivated teacher account gets the same answer as a wrong password
+	if (!user || !valid || (t && !t.active)) {
 		await registerFailure(kv, userKey, LOGIN_LIMITS.perUser);
 		await registerFailure(kv, ipKey, LOGIN_LIMITS.perIp);
 		return { ok: false, error: 'invalid' };
@@ -210,6 +218,8 @@ export async function getTeacher(db: Db, id: string) {
 			id: teacher.id,
 			username: teacher.username,
 			displayName: teacher.displayName,
+			role: teacher.role,
+			active: teacher.active,
 			totpEnabled: sql<boolean>`${teacher.totpSecretEnc} is not null`,
 			recoveryLeft: sql<number>`jsonb_array_length(${teacher.recoveryCodes})`
 		})

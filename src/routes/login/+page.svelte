@@ -36,10 +36,15 @@
 					autocapitalize="none"
 					spellcheck="false"
 					required
-					value={form?.username ?? ''}
+					value={form?.username ?? data.prefill}
 				/>
 			</label>
-			<PasswordField name="password" label="Passwort" autocomplete="current-password" />
+			<PasswordField
+				name="password"
+				label="Passwort"
+				autocomplete="current-password"
+				autofocus={!!data.prefill && !form?.username}
+			/>
 			{#if form?.error}<p class="error" role="alert">{form.error}</p>{/if}
 			<button class="btn btn-primary big" disabled={busy}>Anmelden</button>
 		</form>

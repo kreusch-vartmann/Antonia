@@ -90,3 +90,32 @@ test('the race fits the screen and shows tiles and colours', async ({ page }, te
 	await expect(page.locator('.hint').getByText('Tipp:')).toHaveCount(0);
 	if (shots) await page.screenshot({ path: `${shots}/layout-${project}-hint.png` });
 });
+
+test('an interrupted run can be resumed and a network loss shows a clear message', async ({
+	page
+}, testInfo) => {
+	const project = testInfo.project.name.replace(/[^a-z0-9]/gi, '');
+	await page.goto('/login');
+	await page.getByLabel('Benutzername').fill(username);
+	await page.getByLabel('Passwort', { exact: true }).fill(password);
+	await page.getByRole('button', { name: 'Anmelden' }).click();
+	await expect(page.getByRole('heading', { name: `Hallo ${kidName}!` })).toBeVisible();
+
+	// the run of the previous test is still open: the child may continue it
+	await page.getByRole('link', { name: new RegExp(`Plus ${project} – Normal`) }).click();
+	await expect(page.getByText(/Du warst bei Aufgabe/)).toBeVisible();
+	await page.getByRole('button', { name: 'Weiterfahren' }).click();
+	await expect(page.locator('.expr')).toBeVisible({ timeout: 15_000 });
+
+	// no network: the number stays typed, a clear message appears, nothing is lost
+	await page.context().setOffline(true);
+	await page.getByRole('button', { name: '9', exact: true }).click();
+	await page.getByRole('button', { name: 'Fertig' }).click();
+	await expect(page.getByText(/Keine Verbindung zum Internet/)).toBeVisible({ timeout: 20_000 });
+	await expect(page.locator('.expr .gap')).toHaveText('9');
+
+	await page.context().setOffline(false);
+	await page.getByRole('button', { name: 'Fertig' }).click();
+	await expect(page.getByText(/Keine Verbindung zum Internet/)).toHaveCount(0);
+	await expect(page.locator('.msg')).toBeVisible();
+});

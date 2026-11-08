@@ -13,8 +13,26 @@ import {
 	createStudent,
 	deleteStudent,
 	getStudent,
-	listStudents
+	listStudents,
+	resetStudentPassword,
+	revealStudentPassword,
+	updateStudent
 } from '#lib/server/services/students.ts';
+import {
+	listShares,
+	requireOwner,
+	shareStudent,
+	studentAccess,
+	unshareStudent
+} from '#lib/server/services/access.ts';
+import {
+	createTeacherByAdmin,
+	listTeachers,
+	resetTeacherPassword,
+	setActive,
+	setRole,
+	transferStudents
+} from '#lib/server/services/teachers.ts';
 import { createTasks, deleteTasks } from '#lib/server/services/tasks.ts';
 import {
 	assign,
@@ -35,7 +53,8 @@ import {
 	startOrResumeRun,
 	type RunPayload
 } from '#lib/server/services/runs.ts';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
 import { listTrophies, trophyDetail } from '#lib/server/services/trophies.ts';
 import type { RunMode } from '#lib/domain/modes.ts';
 import { exportCsv, overview, studentReport } from '#lib/server/services/analytics.ts';
@@ -861,5 +880,175 @@ describe('decomposed tasks in a race', () => {
 		const [trophy] = await listTrophies(db, s);
 		const detail = await trophyDetail(db, s, trophy.id);
 		expect(detail?.tasks.map((x) => x.text)).toEqual(['8 + 7 = 8 + 2 + 5 = 15']);
+	});
+});
+
+describe('roles, sharing and visible passwords', () => {
+	const PW_SECRET = 'geheimnis'.repeat(5);
+
+	async function setup() {
+		const admin = await teacher('admin.a');
+		const other = await teacher('lehrer.b');
+		const kid = await createStudent(
+			db,
+			admin,
+			{ firstName: 'Mia', username: 'mia', password: 'sonne12' },
+			PW_SECRET
+		);
+		return { admin, other, kid };
+	}
+
+	it('the first account is admin, later ones are teachers', async () => {
+		const { admin, other } = await setup();
+		const list = await listTeachers(db);
+		expect(list.find((t) => t.id === admin)?.role).toBe('admin');
+		expect(list.find((t) => t.id === other)?.role).toBe('teacher');
+	});
+
+	it('the migration makes the oldest existing account admin', async () => {
+		const a = await teacher('alt.a');
+		await new Promise((r) => setTimeout(r, 5));
+		const b = await teacher('neu.b');
+		await db.update(schema.teacher).set({ role: 'teacher' });
+		const sqlText = readFileSync('drizzle/0004_roles_sharing_passwords.sql', 'utf8');
+		const update = sqlText.split('--> statement-breakpoint').at(-1)!.trim();
+		await db.execute(sql.raw(update));
+		const roles = Object.fromEntries((await listTeachers(db)).map((t) => [t.id, t.role]));
+		expect(roles[a]).toBe('admin');
+		expect(roles[b]).toBe('teacher');
+	});
+
+	it('the owner can look up the password, nobody else; old children have none', async () => {
+		const { admin, other, kid } = await setup();
+		expect(await revealStudentPassword(db, PW_SECRET, admin, kid)).toBe('sonne12');
+		await expect(revealStudentPassword(db, PW_SECRET, other, kid)).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		await shareStudent(db, admin, kid, other);
+		await expect(revealStudentPassword(db, PW_SECRET, other, kid)).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		// wrong key: no readable password, but no crash either
+		expect(await revealStudentPassword(db, 'anderer'.repeat(6), admin, kid)).toBeNull();
+
+		await resetStudentPassword(db, admin, kid, 'mond99', PW_SECRET);
+		expect(await revealStudentPassword(db, PW_SECRET, admin, kid)).toBe('mond99');
+		expect(await login(db, kv, { username: 'mia', password: 'mond99', ip: '1' })).toMatchObject({
+			ok: true
+		});
+
+		const old = await createStudent(db, admin, {
+			firstName: 'Tom',
+			username: 'tom',
+			password: 'abcd'
+		});
+		expect(await revealStudentPassword(db, PW_SECRET, admin, old)).toBeNull();
+		const [row] = await db.select().from(schema.student).where(eq(schema.student.id, kid));
+		expect(row.passwordEnc).not.toContain('mond99');
+	});
+
+	it('a shared child is visible, assignable and evaluable, but not manageable', async () => {
+		const { admin, other, kid } = await setup();
+		expect(await getStudent(db, other, kid)).toBeNull();
+		expect(await listStudents(db, other)).toHaveLength(0);
+
+		await shareStudent(db, admin, kid, other);
+		expect(await studentAccess(db, other, kid)).toBe('shared');
+		expect(await studentAccess(db, admin, kid)).toBe('owner');
+		expect((await getStudent(db, other, kid))?.access).toBe('shared');
+		expect(await listStudents(db, other)).toMatchObject([{ id: kid, owned: false }]);
+		expect(await listShares(db, kid)).toHaveLength(1);
+
+		// assigns an own set
+		const ids = await createTasks(db, other, [
+			{ content: { format: 'arithmetic', expr: { a: 3, op: '+', b: 4, gap: 'result' }, answer: 7 } }
+		]);
+		const setId = await createSet(db, other, { name: 'Plus', taskIds: ids });
+		await assign(db, other, { setId, studentIds: [kid] });
+		expect((await activeAssignmentsForChild(db, kid)).map((a) => a.setName)).toEqual(['Plus']);
+		const races = await racesForStudent(db, other, kid);
+		expect(races[0].assignments[0].editable).toBe(true);
+
+		// evaluates
+		expect((await overview(db, other)).map((o) => o.id)).toEqual([kid]);
+		expect(await studentReport(db, other, kid)).toMatchObject({ tasks: 0 });
+
+		// but cannot manage
+		await expect(requireOwner(db, other, kid)).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			updateStudent(db, other, kid, { firstName: 'X', username: 'mia' })
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(resetStudentPassword(db, other, kid, 'neu123')).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		expect(await deleteStudent(db, other, kid)).toBe(false);
+		await expect(shareStudent(db, other, kid, admin)).rejects.toBeInstanceOf(ValidationError);
+
+		// the guest may only reset the progress of own sets
+		const adminSet = await createSet(db, admin, { name: 'Vom Admin' });
+		await assign(db, admin, { setId: adminSet, studentIds: [kid] });
+		await expect(resetProgress(db, kv, other, kid, adminSet)).rejects.toBeInstanceOf(
+			ValidationError
+		);
+		await resetProgress(db, kv, other, kid, setId);
+		await resetProgress(db, kv, admin, kid, adminSet);
+
+		// unshare
+		await unshareStudent(db, admin, kid, other);
+		expect(await getStudent(db, other, kid)).toBeNull();
+		await expect(assign(db, other, { setId, studentIds: [kid] })).rejects.toBeInstanceOf(
+			ValidationError
+		);
+	});
+
+	it('admin creates, resets and deactivates accounts', async () => {
+		const { admin, other } = await setup();
+		const created = await createTeacherByAdmin(db, admin, {
+			username: 'neu.c',
+			displayName: 'Herr Neu'
+		});
+		expect(created.password.length).toBeGreaterThanOrEqual(10);
+		expect(
+			await login(db, kv, { username: 'neu.c', password: created.password, ip: '9' })
+		).toMatchObject({ ok: true, role: 'teacher' });
+
+		const fresh = await resetTeacherPassword(db, kv, admin, created.id);
+		expect(
+			await login(db, kv, { username: 'neu.c', password: created.password, ip: '9' })
+		).toMatchObject({ ok: false });
+		expect(await login(db, kv, { username: 'neu.c', password: fresh, ip: '9' })).toMatchObject({
+			ok: true
+		});
+
+		// deactivated accounts cannot log in, their sessions end
+		const token = await createSession(kv, 'teacher', created.id);
+		await setActive(db, kv, admin, created.id, false);
+		expect(await validateSession(kv, token)).toBeNull();
+		expect(await login(db, kv, { username: 'neu.c', password: fresh, ip: '9' })).toMatchObject({
+			ok: false
+		});
+		await setActive(db, kv, admin, created.id, true);
+		expect(await login(db, kv, { username: 'neu.c', password: fresh, ip: '9' })).toMatchObject({
+			ok: true
+		});
+
+		// there is always an admin
+		await expect(setRole(db, admin, admin, 'teacher')).rejects.toBeInstanceOf(ValidationError);
+		await expect(setActive(db, kv, admin, admin, false)).rejects.toBeInstanceOf(ValidationError);
+		await setRole(db, admin, other, 'admin');
+		await setRole(db, admin, admin, 'teacher');
+		expect((await listTeachers(db)).filter((t) => t.role === 'admin').map((t) => t.id)).toEqual([
+			other
+		]);
+	});
+
+	it('moves the children of one teacher to another', async () => {
+		const { admin, other, kid } = await setup();
+		await shareStudent(db, admin, kid, other);
+		expect(await transferStudents(db, admin, admin, other)).toBe(1);
+		expect(await studentAccess(db, other, kid)).toBe('owner');
+		expect(await studentAccess(db, admin, kid)).toBeNull();
+		expect(await listShares(db, kid)).toHaveLength(0);
+		await expect(transferStudents(db, admin, other, other)).rejects.toBeInstanceOf(ValidationError);
 	});
 });

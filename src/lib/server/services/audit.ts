@@ -35,6 +35,14 @@ export const AUDIT_LABELS: Record<string, string> = {
 	'student.password.reset': 'Passwort eines Kindes zurückgesetzt',
 	'student.delete': 'Kind gelöscht',
 	'student.export': 'Daten eines Kindes exportiert',
+	'student.password.view': 'Passwort eines Kindes angezeigt',
+	'student.share': 'Kind mit Lehrkraft geteilt',
+	'student.unshare': 'Teilen eines Kindes beendet',
+	'teacher.admin.create': 'Lehrkraft-Konto angelegt (Verwaltung)',
+	'teacher.admin.password': 'Passwort einer Lehrkraft zurückgesetzt',
+	'teacher.admin.role': 'Rolle einer Lehrkraft geändert',
+	'teacher.admin.active': 'Lehrkraft-Konto aktiviert/deaktiviert',
+	'teacher.admin.transfer': 'Kinder an andere Lehrkraft übertragen',
 	'assignment.progress.reset': 'Spielstand eines Kindes zurückgesetzt',
 	'results.export': 'Ergebnisse exportiert'
 };

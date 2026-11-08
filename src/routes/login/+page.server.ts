@@ -5,10 +5,13 @@ import { login, teacherCount } from '#lib/server/services/accounts.ts';
 import { createPending2fa } from '#lib/server/auth/session.ts';
 import { audit } from '#lib/server/services/audit.ts';
 import { dev } from '$app/env';
+import { USERNAME_RE } from '#lib/server/auth/password.ts';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	if (locals.session) redirect(303, '/');
-	return { needsSetup: (await teacherCount(db())) === 0 };
+	// the QR code on the access card brings the user name along
+	const u = (url.searchParams.get('u') ?? '').trim().toLowerCase();
+	return { needsSetup: (await teacherCount(db())) === 0, prefill: USERNAME_RE.test(u) ? u : '' };
 };
 
 export const actions: Actions = {

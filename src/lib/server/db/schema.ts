@@ -40,6 +40,10 @@ export const teacher = pgTable(
 		username: text('username').notNull(),
 		displayName: text('display_name').notNull(),
 		passwordHash: text('password_hash').notNull(),
+		/** Admins manage the teacher accounts. */
+		role: text('role').$type<'admin' | 'teacher'>().notNull().default('teacher'),
+		/** Deactivated accounts cannot log in. */
+		active: boolean('active').notNull().default(true),
 		/** AES-GCM encrypted TOTP secret (null = 2FA off). */
 		totpSecretEnc: text('totp_secret_enc'),
 		/** SHA-256 hashes of unused recovery codes. */
@@ -63,6 +67,8 @@ export const student = pgTable(
 		displayName: text('display_name').notNull(),
 		username: text('username').notNull(),
 		passwordHash: text('password_hash').notNull(),
+		/** AES-GCM encrypted password, so the owner can look it up (null = set before this existed). */
+		passwordEnc: text('password_enc'),
 		/** Child-specific settings (e.g. compensation for disadvantages). */
 		settings: jsonb('settings').$type<SettingsLayer>().notNull().default({}),
 		car: jsonb('car').$type<{ model: string; color: string }>(),
@@ -73,6 +79,24 @@ export const student = pgTable(
 	(t) => [
 		uniqueIndex('student_username_uq').on(t.username),
 		index('student_teacher_idx').on(t.teacherId)
+	]
+);
+
+/** A child shared with another teacher (who may assign and evaluate, not manage the child). */
+export const studentTeacher = pgTable(
+	'student_teacher',
+	{
+		studentId: uuid('student_id')
+			.notNull()
+			.references(() => student.id, { onDelete: 'cascade' }),
+		teacherId: uuid('teacher_id')
+			.notNull()
+			.references(() => teacher.id, { onDelete: 'cascade' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		uniqueIndex('student_teacher_uq').on(t.studentId, t.teacherId),
+		index('student_teacher_teacher_idx').on(t.teacherId)
 	]
 );
 

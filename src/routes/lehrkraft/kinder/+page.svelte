@@ -26,11 +26,16 @@
 			<tbody>
 				{#each data.students as s (s.id)}
 					<tr>
-						<td><a href="/lehrkraft/kinder/{s.id}">{fullName(s)}</a></td>
+						<td>
+							<a href="/lehrkraft/kinder/{s.id}">{fullName(s)}</a>
+							{#if !s.owned}<span class="tag">geteilt</span>{/if}
+						</td>
 						<td>{s.displayName}</td>
 						<td><code>{s.username}</code></td>
 						<td class="row">
-							<a class="btn small" href="/lehrkraft/kinder/{s.id}">Bearbeiten</a>
+							<a class="btn small" href="/lehrkraft/kinder/{s.id}"
+								>{s.owned ? 'Bearbeiten' : 'Öffnen'}</a
+							>
 							<a class="btn small" href="/lehrkraft/kinder/{s.id}/auswertung">Auswertung</a>
 						</td>
 					</tr>

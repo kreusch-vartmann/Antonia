@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { formatOf } from '#lib/domain/formats/index.ts';
+import { canSeeStudent } from './access';
 
 const { run, answerEvent, student, taskSet } = schema;
 
@@ -158,9 +159,7 @@ async function eventsFor(
 		.innerJoin(run, eq(run.id, answerEvent.runId))
 		.innerJoin(student, eq(student.id, run.studentId))
 		.innerJoin(taskSet, eq(taskSet.id, run.setId))
-		.where(
-			and(eq(student.teacherId, teacherId), inArray(run.studentId, studentIds), ...periodConds(p))
-		)
+		.where(and(canSeeStudent(teacherId), inArray(run.studentId, studentIds), ...periodConds(p)))
 		.orderBy(run.startedAt, answerEvent.seq);
 	return rows.map((r) => ({ ...r.e, startedAt: r.startedAt, setName: r.setName }));
 }
@@ -183,7 +182,7 @@ export async function studentReport(db: Db, teacherId: string, studentId: string
 		.from(run)
 		.innerJoin(taskSet, eq(taskSet.id, run.setId))
 		.innerJoin(student, eq(student.id, run.studentId))
-		.where(and(eq(run.studentId, studentId), eq(student.teacherId, teacherId), ...periodConds(p)))
+		.where(and(eq(run.studentId, studentId), canSeeStudent(teacherId), ...periodConds(p)))
 		.orderBy(desc(run.startedAt))
 		.limit(100);
 	return { ...summarize(events), runs };
@@ -203,7 +202,7 @@ export async function overview(db: Db, teacherId: string) {
 			openAssignments: sql<number>`(select count(*)::int from assignment a where a.student_id = "student"."id" and a.archived = false and (a.ends_on is null or a.ends_on >= current_date))`
 		})
 		.from(student)
-		.where(eq(student.teacherId, teacherId))
+		.where(canSeeStudent(teacherId))
 		.orderBy(student.firstName);
 }
 
@@ -213,7 +212,7 @@ export async function runDetail(db: Db, teacherId: string, runId: string) {
 		.from(run)
 		.innerJoin(student, eq(student.id, run.studentId))
 		.innerJoin(taskSet, eq(taskSet.id, run.setId))
-		.where(and(eq(run.id, runId), eq(student.teacherId, teacherId)));
+		.where(and(eq(run.id, runId), canSeeStudent(teacherId)));
 	if (!r) return null;
 	const events = await db
 		.select()
@@ -237,7 +236,7 @@ export async function exportCsv(db: Db, teacherId: string, studentIds: string[],
 		? await db
 				.select({ id: student.id, displayName: student.displayName })
 				.from(student)
-				.where(and(eq(student.teacherId, teacherId), inArray(student.id, studentIds)))
+				.where(and(canSeeStudent(teacherId), inArray(student.id, studentIds)))
 		: [];
 	const names = new Map(owned.map((s) => [s.id, s.displayName]));
 	const rows = owned.length

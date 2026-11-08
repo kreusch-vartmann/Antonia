@@ -4,13 +4,14 @@
 
 	let { data, children }: LayoutProps = $props();
 
-	const nav = [
+	const nav = $derived([
 		{ href: '/lehrkraft', label: 'Übersicht', exact: true },
 		{ href: '/lehrkraft/kinder', label: 'Kinder' },
 		{ href: '/lehrkraft/sets', label: 'Aufgabensets' },
 		{ href: '/lehrkraft/auswertung', label: 'Auswertung' },
+		...(data.isAdmin ? [{ href: '/lehrkraft/admin', label: 'Verwaltung' }] : []),
 		{ href: '/lehrkraft/konto', label: 'Konto' }
-	];
+	]);
 
 	function active(href: string, exact?: boolean) {
 		const p = page.url.pathname;

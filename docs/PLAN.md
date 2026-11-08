@@ -18,23 +18,26 @@ Code von ANTON übernommen.
 
 ## 1. Entscheidungen
 
-| Thema              | Entscheidung                                                                                              |
-| ------------------ | --------------------------------------------------------------------------------------------------------- |
-| Fach / Stufe       | Mathe, Grundschule (Datenmodell bereitet weitere Fächer vor)                                              |
-| Nutzer             | zunächst eine Lehrkraft, mehrere Kinder; Mandantenfähigkeit vorbereitet (`teacher_id` überall)            |
-| Geräte             | PCs, Tablets (überwiegend iPads), ggf. Smartphones → responsive, touch-first, Safari/iPadOS als Hauptziel |
-| Kinder-Login       | Benutzername + Passwort, von der Lehrkraft angelegt/zurückgesetzt; keine E-Mail                           |
-| Lehrkraft-Login    | Benutzername/E-Mail + Passwort, **2FA (TOTP) optional**                                                   |
-| Personendaten      | Vorname, Nachname optional, Anzeigename; Kinderansicht zeigt nur Anzeigenamen                             |
-| Hosting            | Hostinger VPS (EU), Coolify, eigene HTTPS-Subdomain                                                       |
-| Container          | App, PostgreSQL, Redis – jeweils eigener Container/eigene Coolify-Ressource                               |
-| PWA / Offline      | vorerst nein; Offline später                                                                              |
-| Vorlesen           | Web Speech API des Browsers (de-DE)                                                                       |
-| Rennen – Fehler    | **Standard: Boxenstopp** (Auto bleibt stehen, Hilfe); optional „Zurückfallen“ (nie hinter Start)          |
-| Rennen – Optik     | Draufsicht (von oben); Kind wählt sein Auto                                                               |
-| Belohnung          | Sterne (0–3) + eigene Bestleistung; keine Münzen, Shops, Ranglisten                                       |
-| Aufgabenerstellung | manuell und per Generator; generierte Aufgaben einzeln anpassbar                                          |
-| Einstellungen      | pro Aufgabe, Set, Kind und Zuweisung (siehe Vererbung)                                                    |
+| Thema              | Entscheidung                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Fach / Stufe       | Mathe, Grundschule (Datenmodell bereitet weitere Fächer vor)                                                                    |
+| Nutzer             | zunächst eine Lehrkraft, mehrere Kinder; Mandantenfähigkeit vorbereitet (`teacher_id` überall)                                  |
+| Geräte             | PCs, Tablets (überwiegend iPads), ggf. Smartphones → responsive, touch-first, Safari/iPadOS als Hauptziel                       |
+| Kinder-Login       | Benutzername + Passwort, von der Lehrkraft angelegt/zurückgesetzt; keine E-Mail                                                 |
+| Lehrkraft-Login    | Benutzername/E-Mail + Passwort, **2FA (TOTP) optional**                                                                         |
+| Personendaten      | Vorname, Nachname optional, Anzeigename; Kinderansicht zeigt nur Anzeigenamen                                                   |
+| Hosting            | Hostinger VPS (EU), Coolify, eigene HTTPS-Subdomain                                                                             |
+| Container          | App, PostgreSQL, Redis – jeweils eigener Container/eigene Coolify-Ressource                                                     |
+| PWA / Offline      | vorerst nein; Offline später                                                                                                    |
+| Vorlesen           | Web Speech API des Browsers (de-DE)                                                                                             |
+| Rennen – Fehler    | **Standard: Boxenstopp** (Auto bleibt stehen, Hilfe); optional „Zurückfallen“ (nie hinter Start)                                |
+| Rennen – Optik     | Draufsicht (von oben); Kind wählt sein Auto                                                                                     |
+| Belohnung          | Sterne (0–3) + eigene Bestleistung; keine Münzen, Shops, Ranglisten                                                             |
+| Aufgabenerstellung | Set-Assistent (Rechenart, Zahlenraum, …) oder selbst festlegen; kein sichtbarer Aufgabenpool, Aufgaben leben im Set             |
+| Einstellungen      | pro Aufgabe, Set, Kind und Zuweisung (siehe Vererbung)                                                                          |
+| Rollen             | Admin (verwaltet Konten) und Lehrkräfte; Kinder gehören der anlegenden Lehrkraft und lassen sich teilen                         |
+| Kinder-Passwörter  | zusätzlich mit `APP_SECRET` verschlüsselt gespeichert, für die Besitzer:in dauerhaft sichtbar; QR-Code = Adresse + Benutzername |
+| Rennstart          | Startbildschirm mit „Los!“ und Countdown; Uhr, Ton und Vorlesen starten erst nach dem Tipp                                      |
 
 ### Vererbung von Einstellungen
 
@@ -160,7 +163,11 @@ Zeitlimit nur optional, Fehlermuster-Analyse und Export für Förderpläne.
 ### Datenschutz & Sicherheit (technisch)
 
 - Datenminimierung: Nachname optional, keine E-Mail für Kinder
-- Argon2id, Login-Rate-Limit und temporäre Sperre, sichere Session-Cookies
+- Argon2id, Login-Rate-Limit (pro IP großzügig, weil eine Schule oft eine IP hat) und temporäre
+  Sperre, sichere Session-Cookies
+- Kinder-Passwörter liegen zusätzlich AES-256-GCM-verschlüsselt (Schlüssel aus `APP_SECRET`) vor,
+  damit die Lehrkraft sie wieder ansehen und drucken kann. Verlust von `APP_SECRET` macht sie
+  unlesbar, die Anmeldung (Argon2-Hash) funktioniert weiter.
 - Strikte Autorisierung: Kinder sehen nur eigene Daten, Lehrkraft nur eigene Kinder
 - Keine Personendaten in Logs; Security-Header (CSP, HSTS, …)
 - Löschfunktion (Kind inkl. aller Ergebnisse), Datenexport für die Lehrkraft
@@ -189,6 +196,26 @@ Umsetzungsnotizen M1:
 - Geister-Auto (nur Rennart „Bestzeit jagen“) = schnellste beendete fehlerfreie Fahrt des Kindes mit demselben Set.
 - „PDF“ = druckoptimierte Ansicht (Browser „Als PDF speichern“), CSV mit Semikolon für
   deutsche Tabellenprogramme, Formel-Injektion wird verhindert.
+
+Umsetzungsnotizen Überarbeitung Nov. 2026 (siehe `docs/PLAN-2026-11.md`):
+
+- **Rennstart:** Die Rennseite legt nichts mehr an. Erst „Los!“ ruft `POST /api/run/start`.
+  Ein offenes Rennen lässt sich bis 10 Minuten nach der letzten Aktion fortsetzen
+  (`RESUME_WINDOW_MS`), danach wird es abgebrochen. Wiederholte Anfragen tragen eine
+  `actionId`; der Server wendet sie nur einmal an. Fehler der API sind JSON mit `code`.
+- **Durchgänge:** Die Einstellung `rounds` legt für jeden Durchgang eigene „Slots“ in der
+  Engine an (`<taskId>~<round>`); Ereignisse tragen die echte Aufgaben-ID und `round`.
+- **Zahlzerlegung:** `ArithmeticContent.decompose` (`show` | `fill`). Bei `fill` hat eine
+  Aufgabe drei Schritte (`steps`), Ereignisse tragen `step`/`steps`; ein Zwischenschritt
+  bewegt das Auto nicht. Hilfen und Lösung zählen je Schritt.
+- **Spielstand zurücksetzen:** `assignment.progress_reset_at`. Sterne, Bestzeit und die
+  Freischaltung von „Bestzeit jagen“ zählen nur Rennen danach; Auswertung und Pokale nicht.
+- **Rollen:** `teacher.role/active`, Tabelle `student_teacher` (geteilte Kinder), Zugriffsregeln
+  in `services/access.ts`. Das älteste Konto wurde per Migration Admin.
+- **Passwörter:** `student.password_enc` (AES-256-GCM mit `APP_SECRET`, Zweck
+  `student-password`); jede Ansicht der Passwörter steht im Protokoll.
+- **Set-Assistent:** `domain/wizard.ts` erzeugt Aufgabenentwürfe, `SetWizard.svelte` ist die
+  Oberfläche. Sets werden nach `domain/numberRange.ts` (Zahlenraum, Übergang) sortiert.
 
 ### M0 – Fundament
 
