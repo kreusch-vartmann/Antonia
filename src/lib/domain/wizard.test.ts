@@ -105,13 +105,13 @@ describe('set wizard', () => {
 			op: '+-',
 			range: 20,
 			tenTransition: 'with',
-			decompose: 'fill',
+			decompose: 'equation',
 			count: 8,
 			seed: 9
 		});
 		expect(r.drafts.length).toBeGreaterThan(0);
 		for (const d of r.drafts) {
-			expect(d.content.decompose).toBe('fill');
+			expect(d.content.decompose).toBe('equation');
 			const e = d.content.expr!;
 			expect(decomposition(e.a, e.op, e.b)).not.toBeNull();
 		}
@@ -119,7 +119,7 @@ describe('set wizard', () => {
 			op: '+',
 			range: 20,
 			gaps: ['result', 'b'],
-			decompose: 'show',
+			decompose: 'boxes',
 			count: 6,
 			seed: 9
 		});
@@ -178,7 +178,7 @@ describe('set wizard', () => {
 			'Einmaleins 2er-, 5er- und 10er-Reihe'
 		);
 		expect(suggestSetName({ op: ':', rows: [3] })).toBe('Geteilt durch 3');
-		expect(suggestSetName({ op: '+', range: 20, decompose: 'fill' })).toBe(
+		expect(suggestSetName({ op: '+', range: 20, decompose: 'equation' })).toBe(
 			'Plus bis 20 mit Zerlegung'
 		);
 	});

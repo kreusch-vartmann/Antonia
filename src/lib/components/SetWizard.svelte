@@ -266,16 +266,21 @@
 							><input type="radio" name="p.decompose" value="none" bind:group={decompose} /> keine</label
 						>
 						<label class="row check"
-							><input type="radio" name="p.decompose" value="show" bind:group={decompose} /> anzeigen</label
+							><input type="radio" name="p.decompose" value="boxes" bind:group={decompose} /> Kästchen
+							unter der 2. Zahl</label
 						>
 						<label class="row check"
-							><input type="radio" name="p.decompose" value="fill" bind:group={decompose} /> vom Kind
-							ausfüllen lassen</label
+							><input type="radio" name="p.decompose" value="equation" bind:group={decompose} /> neue
+							Gleichung</label
 						>
 					</div>
 					<p class="muted small">
-						Beispiel: <span class="a">8</span> + <span class="b">7</span> = <span class="a">8</span>
-						+ <span class="b">2</span> + <span class="b">5</span> = 15. Die Zerlegung gibt es bei Aufgaben
+						Das Kind tippt erst die beiden Teile der 2. Zahl, dann das Ergebnis. Beispiel
+						„Kästchen“: <span class="a">8</span> + <span class="b">7</span> = □ mit zwei Kästchen
+						unter der <span class="b">7</span> (2 und 5). Beispiel „neue Gleichung“:
+						<span class="a">8</span>
+						+ <span class="b">7</span> in der ersten Zeile, darunter = <span class="a">8</span> +
+						<span class="b">2</span> + <span class="b">5</span> = 15. Die Zerlegung gibt es bei Aufgaben
 						mit gesuchtem Ergebnis, wenn sie sinnvoll ist (Übergang zur nächsten Zehnerzahl oder Zehner
 						und Einer).
 					</p>

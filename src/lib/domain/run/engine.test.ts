@@ -28,7 +28,7 @@ const solution = (s: ReturnType<typeof setup>) => String(s.tasks[s.current!.task
 
 function setupFill(
 	overrides: Partial<Settings> = {},
-	decompose: 'fill' | 'show' = 'fill',
+	decompose: 'equation' | 'boxes' = 'equation',
 	mode?: RunMode
 ) {
 	const settings = { ...DEFAULT_SETTINGS, ...overrides };
@@ -43,7 +43,7 @@ function setupFill(
 }
 
 describe('decomposed tasks', () => {
-	it('"fill": 2, 5, 15 solve one task in three steps', () => {
+	it('"equation": 2, 5, 15 solve one task in three steps', () => {
 		const s = setupFill();
 		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 3 });
 		const r1 = answer(s, { key: key(s), value: '2', ms: 100 }, 100);
@@ -59,7 +59,7 @@ describe('decomposed tasks', () => {
 		expect(r3.events[0]).toMatchObject({ step: 2, steps: 3, taskId: 't1' });
 	});
 
-	it('"fill": a wrong step costs the first try but not the progress', () => {
+	it('"equation": a wrong step costs the first try but not the progress', () => {
 		const s = setupFill({ solutionAfter: 2 });
 		answer(s, { key: key(s), value: '3', ms: 100 }, 100);
 		expect(view(s, 100).current?.hint).not.toBeNull();
@@ -74,7 +74,7 @@ describe('decomposed tasks', () => {
 		expect(s.total).toBe(2);
 	});
 
-	it('"fill": the solution is shown per step', () => {
+	it('"equation": the solution is shown per step', () => {
 		const s = setupFill({ solutionAfter: 1 });
 		answer(s, { key: key(s), value: '9', ms: 100 }, 100);
 		expect(view(s, 100).current?.solution).toBe('2');
@@ -82,15 +82,15 @@ describe('decomposed tasks', () => {
 		expect(view(s, 200).current?.solution).toBeNull();
 	});
 
-	it('"fill" in a flawless race: a wrong step is an engine failure', () => {
-		const s = setupFill({}, 'fill', 'flawless');
+	it('"equation" in a flawless race: a wrong step is an engine failure', () => {
+		const s = setupFill({}, 'equation', 'flawless');
 		answer(s, { key: key(s), value: '2', ms: 100 }, 100);
 		const r = answer(s, { key: key(s), value: '4', ms: 100 }, 200);
 		expect(r.feedback.failed).toBe(true);
 		expect(s.status).toBe('failed');
 	});
 
-	it('"fill" with choices offers numbers for every step', () => {
+	it('"equation" with choices offers numbers for every step', () => {
 		const s = setupFill({ answerFormat: 'choice', choiceCount: 3 });
 		const c0 = view(s, 0).current!;
 		expect(c0.presentation.choices).toHaveLength(3);
@@ -101,10 +101,12 @@ describe('decomposed tasks', () => {
 		expect(c1.disabledChoices).toEqual([]);
 	});
 
-	it('"show" is a normal one-step task', () => {
-		const s = setupFill({}, 'show');
-		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 1 });
-		answer(s, { key: key(s), value: '15', ms: 1 }, 1);
+	it('"boxes" asks for the same three steps', () => {
+		const s = setupFill({}, 'boxes');
+		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 3 });
+		answer(s, { key: key(s), value: '2', ms: 1 }, 1);
+		answer(s, { key: key(s), value: '5', ms: 1 }, 2);
+		answer(s, { key: key(s), value: '15', ms: 1 }, 3);
 		expect(s.status).toBe('finished');
 	});
 });

@@ -60,7 +60,7 @@ export const wizardParams = z
 		hundredTransition: z.enum(['any', 'without', 'with']).default('any'),
 		count: z.coerce.number().int().min(1).max(100).default(10),
 		rounds: z.coerce.number().int().min(1).max(3).default(1),
-		decompose: z.enum(['none', 'show', 'fill']).default('none'),
+		decompose: z.enum(['none', 'boxes', 'equation']).default('none'),
 		allowZero: bool.default(false),
 		first: operand.default({ kind: 'any', fixed: '' }),
 		second: operand.default({ kind: 'any', fixed: '' }),
@@ -263,7 +263,7 @@ export function generateFromWizard(input: unknown): WizardResult {
 		const expr = { a: c.a, op: c.op, b: c.b, gap };
 		const answer = expectedAnswer(expr) ?? computeResult(c.a, c.op, c.b) ?? 0;
 		const content: ArithmeticContent = { format: 'arithmetic', expr, answer };
-		if (wantSplit && gap === 'result') content.decompose = p.decompose as 'show' | 'fill';
+		if (wantSplit && gap === 'result') content.decompose = p.decompose as 'boxes' | 'equation';
 		return { content, tags, origin };
 	});
 	return { drafts, warnings, tags, origin };

@@ -26,6 +26,7 @@
 	import { newActionId, sendAction } from '#lib/client/runApi.ts';
 	import type { RunPayload } from '#lib/server/services/runs.ts';
 	import type { Feedback } from '#lib/domain/run/engine.ts';
+	import type { PresentationPart } from '#lib/domain/formats/types.ts';
 
 	interface Props {
 		initial: RunPayload;
@@ -50,6 +51,15 @@
 	const view = $derived(payload.view);
 	const cur = $derived(view.current);
 	const hasSplit = $derived(!!cur?.presentation.parts.some((p) => p.kind === 'num' && p.split));
+	/** The expression split at its line breaks (a decomposition as a new equation has two lines). */
+	const lines = $derived.by(() => {
+		const out: PresentationPart[][] = [[]];
+		for (const p of cur?.presentation.parts ?? []) {
+			if (p.kind === 'break') out.push([]);
+			else out[out.length - 1].push(p);
+		}
+		return out;
+	});
 	const settings = $derived(payload.settings);
 	const calm = $derived(settings.calm);
 	const mode = $derived(view.mode);
@@ -543,38 +553,44 @@
 					{#if cur.presentation.question}
 						<p class="question">{cur.presentation.question}</p>
 					{/if}
-					<p class="expr" class:with-split={hasSplit} class:long={cur.steps > 1} aria-live="polite">
-						{#each cur.presentation.parts as part, i (i)}
-							{#if part.kind === 'gap'}
-								<span class="gap role-{part.role}" class:filled={input !== ''} aria-label="Antwort"
-									>{input || '?'}</span
-								>
-							{:else if part.kind === 'blank'}
-								<span class="blank role-{part.role}" aria-hidden="true"></span>
-							{:else if part.kind === 'num'}
-								<span class="num role-{part.role}"
-									>{part.value}{#if part.split}<span
-											class="split"
-											role="img"
-											aria-label="{part.value} ist {part.split[0]} und {part.split[1]}"
-											><svg viewBox="0 0 40 16" width="40" height="16" aria-hidden="true"
-												><path
-													d="M20 0 L6 16 M20 0 L34 16"
-													stroke="currentColor"
-													stroke-width="2"
-													fill="none"
-												/></svg
-											><span class="split-parts"
-												><span>{part.split[0]}</span><span>{part.split[1]}</span></span
+					<p
+						class="expr"
+						class:boxed={cur.steps > 1}
+						class:with-split={hasSplit}
+						class:long={lines.length > 1}
+						aria-live="polite"
+					>
+						{#each lines as line, li (li)}
+							<span class="line" class:hang={lines.length > 1 && li === 0}>
+								{#each line as part, i (i)}
+									{#if part.kind === 'num' && part.split}
+										<span class="num role-{part.role}"
+											>{part.value}<span class="split"
+												><svg
+													class="branch"
+													viewBox="0 0 100 20"
+													preserveAspectRatio="none"
+													aria-hidden="true"
+													><path
+														d="M50 0 L25 20 M50 0 L75 20"
+														stroke="currentColor"
+														stroke-width="3"
+														vector-effect="non-scaling-stroke"
+														fill="none"
+													/></svg
+												><span class="split-parts"
+													>{@render cell(part.split[0])}{@render cell(part.split[1])}</span
+												></span
 											></span
-										>{/if}</span
-								>
-							{:else}
-								<span>{part.value}</span>
-							{/if}
-							<!-- space keeps the text readable for screen readers and tests; flex ignores it -->
-							<!-- eslint-disable-next-line svelte/no-useless-mustaches -->
-							{' '}
+										>
+									{:else}
+										{@render cell(part)}
+									{/if}
+									<!-- space keeps the text readable for screen readers and tests; flex ignores it -->
+									<!-- eslint-disable-next-line svelte/no-useless-mustaches -->
+									{' '}
+								{/each}
+							</span>
 						{/each}
 					</p>
 					{#if settings.readAloud !== 'off'}
@@ -687,6 +703,20 @@
 		</section>
 	</div>
 </div>
+
+{#snippet cell(part: PresentationPart)}
+	{#if part.kind === 'gap'}
+		<span class="gap role-{part.role}" class:filled={input !== ''} aria-label="Antwort"
+			>{input || '?'}</span
+		>
+	{:else if part.kind === 'blank'}
+		<span class="blank role-{part.role}" aria-hidden="true"></span>
+	{:else if part.kind === 'num'}
+		<span class="num role-{part.role}">{part.value}</span>
+	{:else if part.kind !== 'break'}
+		<span>{part.value}</span>
+	{/if}
+{/snippet}
 
 <style>
 	.game {
@@ -841,11 +871,17 @@
 		font-weight: 700;
 		margin: var(--space-2) 0;
 		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.1em;
+		font-variant-numeric: tabular-nums;
+	}
+	.line {
+		display: flex;
 		justify-content: center;
 		align-items: center;
 		gap: 0.25em;
 		flex-wrap: wrap;
-		font-variant-numeric: tabular-nums;
 	}
 	.gap {
 		min-width: 2.2em;
@@ -878,12 +914,13 @@
 		position: relative;
 	}
 	.expr.with-split {
-		padding-bottom: 1.5em;
+		padding-bottom: 2.4em;
 	}
-	/* decomposed task: 8 + 7 = 8 + 2 + 5 = 15 stays on one line */
+	/* decomposition as a new equation: the second line starts with "=" below the first number */
 	.expr.long {
-		flex-wrap: nowrap;
-		gap: 0.2em;
+		align-items: flex-start;
+		width: fit-content;
+		margin-inline: auto;
 		font-size: 1.6rem;
 		font-size: clamp(1.2rem, 4.2vw, 2.1rem);
 	}
@@ -892,11 +929,39 @@
 			font-size: clamp(1.2rem, 7.5cqw, 2.1rem);
 		}
 	}
-	.expr.long .gap {
-		min-width: 1.6em;
+	.expr.long .line {
+		flex-wrap: nowrap;
+		justify-content: flex-start;
+		gap: 0.2em;
 	}
-	.expr.long .blank {
-		min-width: 1em;
+	/* invisible "=" so that the first line starts at the same place as the numbers of the second */
+	.line.hang::before {
+		content: '=';
+		visibility: hidden;
+	}
+	/* decomposition tasks: every input is a box */
+	.expr.boxed .gap,
+	.expr.boxed .blank {
+		display: inline-block;
+		box-sizing: border-box;
+		min-width: 1.5em;
+		height: calc(1.2em + 8px);
+		line-height: 1.2;
+		border: 4px solid var(--color-text);
+		border-radius: 0.2em;
+		text-align: center;
+	}
+	.expr.boxed .gap.role-b,
+	.expr.boxed .gap.role-part {
+		border-color: var(--color-num-b);
+	}
+	.expr.boxed .blank {
+		border-style: dashed;
+		border-color: #c3c9d0;
+	}
+	.expr.boxed .blank.role-b,
+	.expr.boxed .blank.role-part {
+		border-color: #e8a3a3;
 	}
 	.split {
 		position: absolute;
@@ -905,14 +970,22 @@
 		transform: translateX(-50%);
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		font-size: 0.5em;
-		line-height: 1.1;
+		align-items: stretch;
+		font-size: 0.7em;
 		color: var(--color-num-b);
+	}
+	.branch {
+		display: block;
+		width: 100%;
+		height: 0.8em;
 	}
 	.split-parts {
 		display: flex;
-		gap: 0.7em;
+		gap: 0.5em;
+	}
+	.split-parts :global(.num) {
+		min-width: 1.5em;
+		text-align: center;
 	}
 	.gap.role-a {
 		border-bottom-color: var(--color-num-a);

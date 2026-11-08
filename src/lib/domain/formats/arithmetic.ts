@@ -10,6 +10,7 @@ import type {
 	Op,
 	PartRole,
 	PresentationPart,
+	SlotPart,
 	StepProgress,
 	TaskFormat
 } from './types';
@@ -41,7 +42,7 @@ export const arithmeticSchema = z
 		answer: int,
 		distractors: z.array(int).max(6).optional(),
 		hint: z.string().trim().max(500).optional(),
-		decompose: z.enum(['show', 'fill']).optional()
+		decompose: z.enum(['boxes', 'equation']).optional()
 	})
 	.superRefine((c, ctx) => {
 		if (!c.expr && !c.text) {
@@ -231,7 +232,7 @@ function splitOf(c: ArithmeticContent): [number, number] | null {
 }
 
 function stepCount(c: ArithmeticContent): number {
-	return c.decompose === 'fill' && splitOf(c) ? 3 : 1;
+	return splitOf(c) ? 3 : 1;
 }
 
 function expectedAt(c: ArithmeticContent, step = 0): number {
@@ -298,15 +299,14 @@ function presentArithmetic(c: ArithmeticContent, progress?: StepProgress) {
 	const coloured = !!c.expr && (c.expr.op === '+' || c.expr.op === '-');
 	const roleA: PartRole = coloured ? 'a' : 'result';
 	const roleB: PartRole = coloured ? 'b' : 'result';
-	const num = (v: number | string, role: PartRole, split?: [string, string]): PresentationPart => ({
+	const num = (v: number | string, role: PartRole): SlotPart => ({
 		kind: 'num',
 		value: String(v),
-		role,
-		...(split ? { split } : {})
+		role
 	});
 	const sym = (value: string): PresentationPart => ({ kind: 'op', value });
 	/** The input slot: a gap now, the number when solved. */
-	const slot = (role: PartRole, value: number): PresentationPart =>
+	const slot = (role: PartRole, value: number): SlotPart =>
 		solved ? num(value, role) : { kind: 'gap', role };
 
 	if (c.expr) {
@@ -316,35 +316,42 @@ function presentArithmetic(c: ArithmeticContent, progress?: StepProgress) {
 		const w = OP_WORD[op];
 		const split = splitOf(c);
 		if (gap === 'result' && steps === 3 && split) {
-			// 8 + 7 = 8 + □ + □ = □, one slot after the other
+			// one slot after the other: the two parts of b, then the result
 			const roles: PartRole[] = ['part', 'part', 'result'];
-			const cell = (i: number): PresentationPart => {
+			const cell = (i: number): SlotPart => {
 				if (i < step || solved) return num(progress?.filled[i] ?? expectedAt(c, i), roles[i]);
 				return i === step ? { kind: 'gap', role: roles[i] } : { kind: 'blank', role: roles[i] };
 			};
-			parts.push(
-				num(a, roleA),
-				sym(s),
-				num(b, roleB),
-				sym('='),
-				num(a, roleA),
-				sym(s),
-				cell(0),
-				sym(s),
-				cell(1),
-				sym('='),
-				cell(2)
-			);
+			if (c.decompose === 'boxes') {
+				// 8 + 7 = □, the parts of the 7 in boxes below it
+				parts.push(
+					num(a, roleA),
+					sym(s),
+					{ kind: 'num', value: String(b), role: roleB, split: [cell(0), cell(1)] },
+					sym('='),
+					cell(2)
+				);
+			} else {
+				// 8 + 7
+				// = 8 + □ + □ = □
+				parts.push(
+					num(a, roleA),
+					sym(s),
+					num(b, roleB),
+					{ kind: 'break' },
+					sym('='),
+					num(a, roleA),
+					sym(s),
+					cell(0),
+					sym(s),
+					cell(1),
+					sym('='),
+					cell(2)
+				);
+			}
 			speech += solved ? '' : stepSpeech(c, Math.min(step, 2));
 		} else if (gap === 'result') {
-			const shown = c.decompose === 'show' && split ? split : null;
-			parts.push(
-				num(a, roleA),
-				sym(s),
-				num(b, roleB, shown ? [String(shown[0]), String(shown[1])] : undefined),
-				sym('='),
-				slot('result', c.answer)
-			);
+			parts.push(num(a, roleA), sym(s), num(b, roleB), sym('='), slot('result', c.answer));
 			speech += `${a} ${w} ${b} ist gleich wie viel?`;
 		} else if (gap === 'a') {
 			parts.push(slot(roleA, a), sym(s), num(b, roleB), sym('='), num(r, 'result'));
@@ -387,10 +394,16 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 	},
 
 	solved(c) {
-		const n = stepCount(c);
-		const filled = Array.from({ length: n }, (_, i) => String(expectedAt(c, i)));
-		return presentArithmetic(c, { step: n, filled })
-			.parts.map((p) => (p.kind === 'blank' || p.kind === 'gap' ? '_' : p.value))
+		const split = splitOf(c);
+		if (c.expr && split) {
+			const { a, op, b } = c.expr;
+			const s = OP_SYMBOL[op];
+			return `${a} ${s} ${b} = ${a} ${s} ${split[0]} ${s} ${split[1]} = ${c.answer}`;
+		}
+		return presentArithmetic(c, { step: 1, filled: [] })
+			.parts.map((p) =>
+				p.kind === 'blank' || p.kind === 'gap' ? '_' : 'value' in p ? p.value : ''
+			)
 			.join(' ');
 	},
 

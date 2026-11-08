@@ -6,7 +6,7 @@
 		expr?: ArithmeticContent['expr'];
 		answer: number | null;
 		hint?: string;
-		decompose?: 'show' | 'fill';
+		decompose?: 'boxes' | 'equation';
 	}
 </script>
 
@@ -43,7 +43,7 @@
 	// svelte-ignore state_referenced_locally
 	let answer = $state<number | null>(draft.answer);
 	// svelte-ignore state_referenced_locally
-	let decompose = $state<'' | 'show' | 'fill'>(draft.decompose ?? '');
+	let decompose = $state<'' | 'boxes' | 'equation'>(draft.decompose ?? '');
 	/** Once the teacher typed an answer, it is no longer calculated automatically. */
 	let touched = false;
 
@@ -122,8 +122,8 @@
 				: 'Nur bei Plus/Minus mit gesuchtem Ergebnis'}
 		>
 			<option value="">keine</option>
-			<option value="show">anzeigen</option>
-			<option value="fill">ausfüllen</option>
+			<option value="boxes">Kästchen</option>
+			<option value="equation">neue Gleichung</option>
 		</select>
 	</td>
 	<td

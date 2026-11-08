@@ -27,7 +27,7 @@
 	let text = $state(c?.text ?? '');
 	let answer = $state<number | null>(c?.answer ?? null);
 	let answerTouched = $state(!!c);
-	let decompose = $state<'' | 'show' | 'fill'>(c?.decompose ?? '');
+	let decompose = $state<'' | 'boxes' | 'equation'>(c?.decompose ?? '');
 	const split = $derived(
 		mode !== 'text' && gap === 'result' && a !== null && b !== null ? decomposition(a, op, b) : null
 	);
@@ -151,8 +151,16 @@
 			<span>Zahlzerlegung</span>
 			<select name="decompose" bind:value={decompose}>
 				<option value="">keine</option>
-				<option value="show">anzeigen ({b} = {split[0]} + {split[1]})</option>
-				<option value="fill">vom Kind ausfüllen lassen</option>
+				<option value="boxes">Kästchen unter der {b} ({b} = {split[0]} + {split[1]})</option>
+				<option value="equation"
+					>neue Gleichung ({a}
+					{OP_SYMBOL[op]}
+					{b} = {a}
+					{OP_SYMBOL[op]}
+					{split[0]}
+					{OP_SYMBOL[op]}
+					{split[1]})</option
+				>
 			</select>
 		</label>
 	{/if}

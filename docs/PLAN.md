@@ -205,7 +205,7 @@ Umsetzungsnotizen Überarbeitung Nov. 2026 (siehe `docs/PLAN-2026-11.md`):
   `actionId`; der Server wendet sie nur einmal an. Fehler der API sind JSON mit `code`.
 - **Durchgänge:** Die Einstellung `rounds` legt für jeden Durchgang eigene „Slots“ in der
   Engine an (`<taskId>~<round>`); Ereignisse tragen die echte Aufgaben-ID und `round`.
-- **Zahlzerlegung:** `ArithmeticContent.decompose` (`show` | `fill`). Bei `fill` hat eine
+- **Zahlzerlegung:** `ArithmeticContent.decompose` (`boxes` | `equation`, Darstellung als Kästchen unter der 2. Zahl bzw. als neue Gleichungszeile). Eine
   Aufgabe drei Schritte (`steps`), Ereignisse tragen `step`/`steps`; ein Zwischenschritt
   bewegt das Auto nicht. Hilfen und Lösung zählen je Schritt.
 - **Spielstand zurücksetzen:** `assignment.progress_reset_at`. Sterne, Bestzeit und die

@@ -201,21 +201,23 @@ describe('decomposition of the second number', () => {
 		expect(decomposition(3, '*', 5)).toBeNull();
 	});
 
-	const fill = (decompose: 'show' | 'fill' = 'fill'): ArithmeticContent => ({
+	const fill = (decompose: 'boxes' | 'equation' = 'equation'): ArithmeticContent => ({
 		...add(8, 7),
 		decompose
 	});
 
 	it('is dropped when the task has no usable split', () => {
-		const v = arithmetic.validate({ ...add(8, 2), decompose: 'fill' });
+		const v = arithmetic.validate({ ...add(8, 2), decompose: 'equation' });
 		expect(v.ok && v.content.decompose).toBeUndefined();
-		const w = arithmetic.validate({ ...add(8, 7, '+', 'b'), decompose: 'show' });
+		const w = arithmetic.validate({ ...add(8, 7, '+', 'b'), decompose: 'boxes' });
 		expect(w.ok && w.content.decompose).toBeUndefined();
 		const x = arithmetic.validate(fill());
-		expect(x.ok && x.content.decompose).toBe('fill');
+		expect(x.ok && x.content.decompose).toBe('equation');
+		const y = arithmetic.validate(fill('boxes'));
+		expect(y.ok && y.content.decompose).toBe('boxes');
 	});
 
-	it('"fill" asks for the two parts and then the result, one after the other', () => {
+	it('"equation" asks for the two parts and then the result in a second line', () => {
 		const c = fill();
 		expect(arithmetic.steps(c)).toBe(3);
 		expect([0, 1, 2].map((i) => arithmetic.expected(c, i))).toEqual([2, 5, 15]);
@@ -229,6 +231,7 @@ describe('decomposition of the second number', () => {
 			'num',
 			'op',
 			'num',
+			'break',
 			'op',
 			'num',
 			'op',
@@ -242,6 +245,7 @@ describe('decomposition of the second number', () => {
 			'num',
 			'op',
 			'num',
+			'break',
 			'op',
 			'num',
 			'op',
@@ -254,21 +258,43 @@ describe('decomposition of the second number', () => {
 		const last = arithmetic.present(c, { step: 2, filled: ['2', '5'] }).parts;
 		expect(last.at(-1)).toEqual({ kind: 'gap', role: 'result' });
 		// the parts of the second number are red like the number itself
-		expect(last[6]).toEqual({ kind: 'num', value: '2', role: 'part' });
-		expect(last[8]).toEqual({ kind: 'num', value: '5', role: 'part' });
+		expect(last[7]).toEqual({ kind: 'num', value: '2', role: 'part' });
+		expect(last[9]).toEqual({ kind: 'num', value: '5', role: 'part' });
 		expect(arithmetic.present(c, { step: 0, filled: [] }).speech).toBe(
 			'Wie viel fehlt von 8 bis zum nächsten Zehner?'
 		);
 		expect(arithmetic.solved(c)).toBe('8 + 7 = 8 + 2 + 5 = 15');
 	});
 
-	it('"show" only draws the split below the second number', () => {
-		const c = fill('show');
-		expect(arithmetic.steps(c)).toBe(1);
-		const parts = arithmetic.present(c).parts;
-		expect(parts[2]).toEqual({ kind: 'num', value: '7', role: 'b', split: ['2', '5'] });
-		expect(parts.at(-1)).toEqual({ kind: 'gap', role: 'result' });
-		expect(arithmetic.solved(c)).toBe('8 + 7 = 15');
+	it('"boxes" puts the two parts into boxes below the second number', () => {
+		const c = fill('boxes');
+		expect(arithmetic.steps(c)).toBe(3);
+		expect([0, 1, 2].map((i) => arithmetic.expected(c, i))).toEqual([2, 5, 15]);
+		const at = (step: number, filled: string[]) => arithmetic.present(c, { step, filled }).parts;
+		expect(at(0, [])).toEqual([
+			{ kind: 'num', value: '8', role: 'a' },
+			{ kind: 'op', value: '+' },
+			{
+				kind: 'num',
+				value: '7',
+				role: 'b',
+				split: [
+					{ kind: 'gap', role: 'part' },
+					{ kind: 'blank', role: 'part' }
+				]
+			},
+			{ kind: 'op', value: '=' },
+			{ kind: 'blank', role: 'result' }
+		]);
+		const last = at(2, ['2', '5']);
+		expect(last[2]).toMatchObject({
+			split: [
+				{ kind: 'num', value: '2', role: 'part' },
+				{ kind: 'num', value: '5', role: 'part' }
+			]
+		});
+		expect(last.at(-1)).toEqual({ kind: 'gap', role: 'result' });
+		expect(arithmetic.solved(c)).toBe('8 + 7 = 8 + 2 + 5 = 15');
 	});
 
 	it('gives a hint for every step and keeps the old hint for the result', () => {

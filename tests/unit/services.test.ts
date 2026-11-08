@@ -841,7 +841,7 @@ describe('decomposed tasks in a race', () => {
 					format: 'arithmetic',
 					expr: { a: 8, op: '+', b: 7, gap: 'result' },
 					answer: 15,
-					decompose: 'fill'
+					decompose: 'equation'
 				}
 			}
 		]);

@@ -23,9 +23,10 @@ export interface ArithmeticContent {
 	hint?: string;
 	/**
 	 * Split of the second number for plus/minus tasks with a gap at the result:
-	 * `show` draws the split, `fill` makes the child enter the two parts and then the result.
+	 * The child enters the two parts and then the result, either in boxes below the second
+	 * number (`boxes`) or in a new equation line (`equation`).
 	 */
-	decompose?: 'show' | 'fill';
+	decompose?: 'boxes' | 'equation';
 }
 
 /** Union of all task contents. New formats extend this union. */
@@ -50,14 +51,22 @@ export interface Hint {
  */
 export type PartRole = 'a' | 'b' | 'result' | 'part';
 
-export type PresentationPart =
-	/** `split` draws the decomposition of this number below it. */
-	| { kind: 'num'; value: string; role: PartRole; split?: [string, string] }
-	| { kind: 'op'; value: string }
-	| { kind: 'text'; value: string }
+/** A number or input slot; the parts of a decomposition below a number. */
+export type SlotPart =
+	| { kind: 'num'; value: string; role: PartRole }
 	/** The input slot of the current step. */
 	| { kind: 'gap'; role: PartRole }
 	/** An input slot of a later step. */
+	| { kind: 'blank'; role: PartRole };
+
+export type PresentationPart =
+	/** `split` draws the two parts of this number in a branch below it. */
+	| { kind: 'num'; value: string; role: PartRole; split?: [SlotPart, SlotPart] }
+	| { kind: 'op'; value: string }
+	| { kind: 'text'; value: string }
+	/** Continues in a new line; the new line starts with "=" below the first number. */
+	| { kind: 'break' }
+	| { kind: 'gap'; role: PartRole }
 	| { kind: 'blank'; role: PartRole };
 
 /** What the child sees. Contains no solution. */

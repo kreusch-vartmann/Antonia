@@ -53,6 +53,6 @@ export function arithmeticFromForm(form: FormData, p = ''): ArithmeticContent {
 		throw new ValidationError('Bitte das Ergebnis angeben (ganze Zahl ≥ 0).');
 	}
 	const dec = String(g('decompose') ?? '');
-	const decompose = dec === 'show' || dec === 'fill' ? dec : undefined;
+	const decompose = dec === 'boxes' || dec === 'equation' ? dec : undefined;
 	return { format: 'arithmetic', expr, text, answer, distractors, hint, decompose };
 }

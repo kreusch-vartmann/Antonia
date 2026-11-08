@@ -94,9 +94,10 @@ Der Container läuft als Nicht-root-Benutzer.
    geschafft hat. Beim Kind sind alle Zuweisungen eines Sets **gebündelt** sichtbar;
    **Spielstand zurücksetzen** startet Sterne, Bestzeit und Freischaltung neu, ohne die
    Zuweisung oder die Auswertung zu löschen.
-4. **Zahlzerlegung** bei Plus und Minus: _anzeigen_ (die 7 wird als 2 | 5 gezeigt) oder
-   _ausfüllen_ (`8 + 7 = 8 + □ + □ = □`, das Kind tippt 2, 5, 15). Die erste Zahl ist blau,
-   die zweite und ihre Zerlegung rot, ebenso die Plättchen im Tipp.
+4. **Zahlzerlegung** bei Plus und Minus, das Kind tippt 2, 5, 15. Zwei Darstellungen:
+   _Kästchen_ (`8 + 7 = □` mit zwei Kästchen unter der 7) oder _neue Gleichung_ (`8 + 7` und
+   darunter `= 8 + □ + □ = □`). Die erste Zahl ist blau, die zweite und ihre Zerlegung rot,
+   ebenso die Plättchen im Tipp.
 5. **Einstellungen** hat jede Einstellung an genau einem Ort: Was das Kind braucht
    (Vorlesen, Töne, Antwortformat, Nachteilsausgleich bei Zeitlimits) steht beim **Kind**.
    Was geübt wird (Reihenfolge, Hilfen, Zeit pro Aufgabe) steht beim **Aufgabenset**.

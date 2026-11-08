@@ -77,7 +77,7 @@
 							<span class="muted small">→ {item.answer}</span>
 							{#if item.decompose}
 								<span class="tag"
-									>Zerlegung: {item.decompose === 'fill' ? 'ausfüllen' : 'anzeigen'}</span
+									>Zerlegung: {item.decompose === 'equation' ? 'neue Gleichung' : 'Kästchen'}</span
 								>
 							{/if}
 						</span>
