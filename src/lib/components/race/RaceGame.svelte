@@ -6,6 +6,7 @@
 	import RaceCar from './RaceCar.svelte';
 	import HintVisual from './HintVisual.svelte';
 	import Icon from '../Icon.svelte';
+	import IconButton from '../IconButton.svelte';
 	import Trophy from '../Trophy.svelte';
 	import Confetti from '../Confetti.svelte';
 	import Stopwatch from '../Stopwatch.svelte';
@@ -19,20 +20,23 @@
 		clockPrecise,
 		trophyFor
 	} from '#lib/domain/modes.ts';
-	import { speak, speechBroken, stopSpeaking } from '#lib/client/speech.ts';
+	import { speak, speechBroken, speechSilent, stopSpeaking } from '#lib/client/speech.ts';
 	import { sounds } from '#lib/client/sound.ts';
+	import { unlockMedia } from '#lib/client/media.ts';
+	import { newActionId, sendAction } from '#lib/client/runApi.ts';
 	import type { RunPayload } from '#lib/server/services/runs.ts';
 	import type { Feedback } from '#lib/domain/run/engine.ts';
 
 	interface Props {
 		initial: RunPayload;
-		assignmentId: string;
 		setName: string;
 		car: { model: string; color: string };
 		name: string;
+		/** Back to the start screen for a new run. */
+		onrestart: () => void;
 	}
 
-	let { initial, assignmentId, setName, car, name }: Props = $props();
+	let { initial, setName, car, name, onrestart }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let payload = $state<RunPayload>(initial);
@@ -41,7 +45,7 @@
 	let message = $state<{ kind: 'good' | 'info' | 'warn'; text: string } | null>(null);
 	let lastWrong = $state<string | null>(null);
 	let confirmExit = $state(false);
-	let netError = $state(false);
+	let problem = $state<{ kind: 'offline' | 'expired' | 'server'; text: string } | null>(null);
 
 	const view = $derived(payload.view);
 	const cur = $derived(view.current);
@@ -178,14 +182,46 @@
 		raf = requestAnimationFrame(loop);
 	}
 
+	// Layout flags (the CSS uses the same media queries).
+	let wide = $state(false);
+	let short = $state(false);
+	let small = $state(false);
+	let tiny = $state(false);
+	const trackHeight = $derived(short ? 60 : wide ? 70 : tiny ? 22 : small ? 26 : 34);
+	let stopMedia = () => {};
+
 	onMount(() => {
 		raf = requestAnimationFrame(loop);
 		window.addEventListener('keydown', onKey);
+		const mqWide = matchMedia('(orientation: landscape) and (min-width: 700px)');
+		const mqShort = matchMedia('(orientation: landscape) and (max-height: 500px)');
+		const mqSmall = matchMedia('(orientation: portrait) and (max-height: 700px)');
+		const mqTiny = matchMedia('(orientation: portrait) and (max-height: 600px)');
+		const update = () => {
+			wide = mqWide.matches;
+			short = mqShort.matches;
+			small = mqSmall.matches;
+			tiny = mqTiny.matches;
+		};
+		update();
+		const all = [mqWide, mqShort, mqSmall, mqTiny];
+		// older Safari only knows addListener
+		for (const mq of all) {
+			if (mq.addEventListener) mq.addEventListener('change', update);
+			else mq.addListener(update);
+		}
+		stopMedia = () => {
+			for (const mq of all) {
+				if (mq.removeEventListener) mq.removeEventListener('change', update);
+				else mq.removeListener(update);
+			}
+		};
 	});
 	onDestroy(() => {
 		if (typeof window !== 'undefined') {
 			cancelAnimationFrame(raf);
 			window.removeEventListener('keydown', onKey);
+			stopMedia();
 			stopSpeaking();
 		}
 	});
@@ -231,54 +267,58 @@
 		}
 	});
 
-	async function send(body: object, given?: string) {
+	/** Sends an action; returns false if it did not arrive. */
+	async function send(body: Record<string, unknown>, given?: string): Promise<boolean> {
 		busy = true;
-		netError = false;
-		try {
-			const res = await fetch(`/api/run/${payload.runId}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			if (res.status === 401 || res.status === 403) {
+		problem = null;
+		const r = await sendAction(
+			payload.runId,
+			body.type === 'tick' ? body : { ...body, actionId: newActionId() }
+		);
+		busy = false;
+		if (!r.ok) {
+			if (r.kind === 'auth') {
 				location.href = '/login';
-				return;
+			} else if (r.kind === 'offline') {
+				problem = { kind: 'offline', text: 'Keine Verbindung zum Internet. Bitte nochmal tippen.' };
+			} else if (r.kind === 'expired') {
+				problem = { kind: 'expired', text: 'Dieses Rennen ist abgelaufen.' };
+			} else {
+				problem = { kind: 'server', text: r.message ?? 'Hoppla, da ist etwas schiefgelaufen.' };
 			}
-			if (!res.ok) throw new Error(String(res.status));
-			const data = (await res.json()) as RunPayload & { feedback: Feedback };
-			const wasRunning = payload.view.status === 'running';
-			payload = data;
-			receivedAt = performance.now();
-			now = receivedAt;
-			sentTick = false;
-			feedbackMessage(data.feedback, given);
-			if (wasRunning && data.view.status !== 'running' && data.view.status !== 'aborted') {
-				// engine failure already played its sound with the feedback
-				const celebrate = data.view.status === 'finished' || !lostToClock;
-				if (settings.sound && data.view.status !== 'failed' && celebrate) sounds.finish();
-				if (settings.readAloud === 'auto') speak(endText());
-			}
-		} catch {
-			netError = true;
-		} finally {
-			busy = false;
+			return false;
 		}
+		const data = r.data;
+		const wasRunning = payload.view.status === 'running';
+		payload = data;
+		receivedAt = performance.now();
+		now = receivedAt;
+		sentTick = false;
+		feedbackMessage(data.feedback, given);
+		if (wasRunning && data.view.status !== 'running' && data.view.status !== 'aborted') {
+			// engine failure already played its sound with the feedback
+			const celebrate = data.view.status === 'finished' || !lostToClock;
+			if (settings.sound && data.view.status !== 'failed' && celebrate) sounds.finish();
+			if (settings.readAloud === 'auto') speak(endText());
+		}
+		return true;
 	}
 
-	function submit(value = input) {
+	async function submit(value = input) {
 		if (!cur || busy || value === '') return;
-		if (settings.sound) sounds.unlock();
+		unlockMedia();
 		const ms = Math.round(performance.now() - taskStart);
-		void send({ type: 'answer', key: cur.key, value, ms }, value);
+		const wasKeypad = value === input;
 		input = '';
+		const ok = await send({ type: 'answer', key: cur.key, value, ms }, value);
+		// Keep the typed number if it did not arrive, so the child only has to tap again.
+		if (!ok && wasKeypad && input === '') input = value;
 	}
 
 	function press(d: string) {
 		if (busy || !cur) return;
-		if (settings.sound) {
-			sounds.unlock();
-			sounds.tap();
-		}
+		unlockMedia();
+		if (settings.sound) sounds.tap();
 		if (input.length < 6) input = (input === '0' ? '' : input) + d;
 	}
 
@@ -293,30 +333,19 @@
 		else if (e.key === 'Enter') submit();
 	}
 
-	async function again() {
-		busy = true;
-		try {
-			const res = await fetch('/api/run/start', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ assignmentId, mode })
-			});
-			if (!res.ok) throw new Error();
-			payload = await res.json();
-			receivedAt = performance.now();
-			progress.set(0, { duration: 0 });
-			message = null;
-		} catch {
-			netError = true;
-		} finally {
-			busy = false;
-		}
-	}
-
 	async function quit() {
 		await send({ type: 'abort' });
 		location.href = '/ueben';
 	}
+
+	function restartRun() {
+		unlockMedia();
+		onrestart();
+	}
+
+	$effect(() => {
+		if (confirmExit && settings.readAloud === 'auto') untrack(() => speak('Möchtest du aufhören?'));
+	});
 
 	function endText() {
 		const r = payload.view.result;
@@ -352,13 +381,13 @@
 			>
 		{/if}
 		{#if view.status === 'running'}
-			<button class="btn small" onclick={() => (confirmExit = true)}>Pause</button>
+			<IconButton icon="stop" label="Aufhören" onclick={() => (confirmExit = true)} />
 		{/if}
 	</header>
 
 	<div class="layout">
 		<div class="track-wrap">
-			<RaceTrack {cars} {calm} />
+			<RaceTrack {cars} {calm} heightVh={trackHeight} />
 			{#if trophyKind}
 				<div class="trophy-pop" aria-hidden="true">
 					<div class="trophy-glow"><Trophy kind={trophyKind} /></div>
@@ -391,11 +420,17 @@
 			{#if confirmExit}
 				<div class="center stack">
 					<p class="big-text">Möchtest du aufhören?</p>
+					{#if mode === 'time'}<p>Der {CLOCK_OPPONENT} fährt weiter.</p>{/if}
 					<div class="row center-row">
-						<button class="btn btn-primary big" onclick={() => (confirmExit = false)}
-							>Weiterfahren</button
-						>
-						<button class="btn big" onclick={quit}>Aufhören</button>
+						<IconButton
+							icon="play"
+							label="Weiterfahren"
+							primary
+							large
+							onclick={() => (confirmExit = false)}
+						/>
+						<IconButton icon="restart" label="Neu starten" large onclick={restartRun} />
+						<IconButton icon="home" label="Aufhören" large onclick={quit} />
 					</div>
 				</div>
 			{:else if view.status !== 'running'}
@@ -443,7 +478,6 @@
 						{#if trophyKind}
 							<p class="won-text">
 								Du hast einen <strong>{TROPHY_WON[trophyKind]}</strong> gewonnen!
-								<a href="/ueben/vitrine">Zur Vitrine</a>
 							</p>
 						{/if}
 						{#if mode === 'time' && view.result}
@@ -476,10 +510,27 @@
 						>
 					{/if}
 					<div class="row center-row">
-						<button class="btn btn-primary big" onclick={again} disabled={busy}
-							>{view.status === 'failed' || lostToClock ? 'Neu starten' : 'Nochmal fahren'}</button
-						>
-						<a class="btn big" href="/ueben">Zur Übersicht</a>
+						{#if view.status === 'failed' || lostToClock}
+							<IconButton
+								icon="restart"
+								label="Neu starten"
+								primary
+								large
+								disabled={busy}
+								onclick={restartRun}
+							/>
+						{:else}
+							<IconButton
+								icon="replay"
+								label="Nochmal fahren"
+								primary
+								large
+								disabled={busy}
+								onclick={restartRun}
+							/>
+						{/if}
+						<IconButton icon="home" label="Zur Übersicht" href="/ueben" large />
+						<IconButton icon="trophy" label="Zur Vitrine" href="/ueben/vitrine" large />
 					</div>
 				</div>
 			{:else if cur}
@@ -489,13 +540,18 @@
 					{/if}
 					<p class="expr" aria-live="polite">
 						{#each cur.presentation.parts as part, i (i)}
-							{#if part.kind === 'text'}
-								<span>{part.value}</span>
-							{:else}
-								<span class="gap" class:filled={input !== ''} aria-label="Antwort"
+							{#if part.kind === 'gap'}
+								<span class="gap role-{part.role}" class:filled={input !== ''} aria-label="Antwort"
 									>{input || '?'}</span
 								>
+							{:else if part.kind === 'num'}
+								<span class="num role-{part.role}">{part.value}</span>
+							{:else}
+								<span>{part.value}</span>
 							{/if}
+							<!-- space keeps the text readable for screen readers and tests; flex ignores it -->
+							<!-- eslint-disable-next-line svelte/no-useless-mustaches -->
+							{' '}
 						{/each}
 					</p>
 					{#if settings.readAloud !== 'off'}
@@ -505,6 +561,11 @@
 							onclick={() => speak(cur.presentation.speech)}
 							aria-label="Aufgabe vorlesen"><Icon name="speaker" /> Vorlesen</button
 						>
+						{#if $speechSilent}
+							<p class="muted small">
+								Vorlesen klappt auf diesem Gerät gerade nicht. Ist der Ton an?
+							</p>
+						{/if}
 					{/if}
 				</div>
 
@@ -524,8 +585,11 @@
 				{/if}
 
 				<div class="feedback" aria-live="assertive">
-					{#if netError}
-						<p class="msg warn">Keine Verbindung. Bitte nochmal versuchen.</p>
+					{#if problem}
+						<p class="msg warn">{problem.text}</p>
+						{#if problem.kind !== 'offline'}
+							<IconButton icon="restart" label="Neu starten" large onclick={restartRun} />
+						{/if}
 					{:else if message}
 						<p class="msg {message.kind}">{message.text}</p>
 					{/if}
@@ -536,7 +600,10 @@
 
 				{#if cur.hint && !cur.solution}
 					<div class="hint">
-						<p><strong>Tipp:</strong> {cur.hint.text}</p>
+						<!-- tiles speak for themselves; the text is only read aloud -->
+						{#if cur.hint.visual?.kind !== 'twenty'}
+							<p><strong>Tipp:</strong> {cur.hint.text}</p>
+						{/if}
 						{#if cur.hint.visual}<HintVisual visual={cur.hint.visual} />{/if}
 						{#if settings.readAloud !== 'off'}
 							<button
@@ -615,6 +682,11 @@
 	}
 	.set {
 		font-weight: 700;
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.mode-chip {
 		background: #fff3d6;
@@ -627,6 +699,7 @@
 	.sr-progress {
 		color: var(--color-muted);
 		font-size: 1rem;
+		white-space: nowrap;
 	}
 	.clock {
 		font-variant-numeric: tabular-nums;
@@ -635,13 +708,10 @@
 		display: grid;
 		gap: var(--space-4);
 	}
-	@media (min-width: 900px) and (orientation: landscape) {
+	@media (orientation: landscape) and (min-width: 700px) {
 		.layout {
-			grid-template-columns: 1.1fr 1fr;
+			grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
 			align-items: start;
-		}
-		:global(.track) {
-			max-height: 70dvh !important;
 		}
 	}
 	.track-wrap {
@@ -711,6 +781,7 @@
 		display: flex;
 		gap: var(--space-4);
 		flex-wrap: wrap;
+		justify-content: center;
 		font-size: 0.95rem;
 		padding: var(--space-1) var(--space-2);
 	}
@@ -725,8 +796,13 @@
 		padding: var(--space-4);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-3);
-		min-height: 20rem;
+		gap: clamp(0.4rem, 1.5vh, 1rem);
+		min-height: 0;
+	}
+	@media (min-height: 800px) {
+		.panel {
+			min-height: 20rem;
+		}
 	}
 	.task {
 		text-align: center;
@@ -736,13 +812,14 @@
 		margin: 0 0 var(--space-2);
 	}
 	.expr {
-		font-size: clamp(2.2rem, 7vw, 3.6rem);
+		font-size: 2.6rem;
+		font-size: clamp(1.8rem, min(7vw, 6vh), 3.6rem);
 		font-weight: 700;
 		margin: var(--space-2) 0;
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		gap: 0.4em;
+		gap: 0.25em;
 		flex-wrap: wrap;
 		font-variant-numeric: tabular-nums;
 	}
@@ -754,6 +831,20 @@
 	}
 	.gap.filled {
 		color: var(--color-text);
+	}
+	.num.role-a {
+		color: var(--color-num-a);
+	}
+	.num.role-b,
+	.num.role-part {
+		color: var(--color-num-b);
+	}
+	.gap.role-a {
+		border-bottom-color: var(--color-num-a);
+	}
+	.gap.role-b,
+	.gap.role-part {
+		border-bottom-color: var(--color-num-b);
 	}
 	.speak {
 		margin: 0 auto;
@@ -776,6 +867,7 @@
 	}
 	.feedback {
 		min-height: 2.5rem;
+		min-height: clamp(1.6rem, 5vh, 2.5rem);
 		text-align: center;
 	}
 	.msg {
@@ -797,18 +889,81 @@
 		color: #23446e;
 		background: #e6eef9;
 	}
-	@media (max-height: 900px) {
-		.key {
-			min-height: 3.4rem !important;
-			font-size: 1.6rem !important;
+	/* Phone held sideways: very little height */
+	@media (orientation: landscape) and (max-height: 500px) {
+		.layout {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			align-items: start;
 		}
-		.expr {
-			font-size: clamp(2rem, 5vw, 2.8rem) !important;
-			margin: 0 !important;
+		.game {
+			padding-top: 0;
+			padding-bottom: var(--space-2);
+		}
+		.bar {
+			padding: 0;
+		}
+		.bar :global(.ibtn) {
+			width: 3rem;
+			height: 3rem;
+			min-height: 3rem;
 		}
 		.panel {
-			gap: var(--space-2) !important;
-			padding: var(--space-3) !important;
+			padding: var(--space-2);
+			gap: 0.3rem;
+		}
+		.key {
+			min-height: 2.6rem;
+			font-size: 1.3rem;
+		}
+		.feedback {
+			min-height: 1.5rem;
+		}
+		.legend {
+			display: none;
+		}
+	}
+	/* narrow screens: the progress text would squeeze the name of the set */
+	@media (max-width: 460px) {
+		.sr-progress {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+		}
+	}
+	/* Phone held upright */
+	@media (orientation: portrait) and (max-height: 700px) {
+		.legend {
+			display: none;
+		}
+		.game {
+			padding-bottom: var(--space-2);
+		}
+		.layout {
+			gap: var(--space-2);
+		}
+		.bar {
+			padding: 0;
+			gap: var(--space-2);
+		}
+		.bar :global(.ibtn) {
+			width: 3.5rem;
+			height: 3.5rem;
+			min-height: 3.5rem;
+		}
+		.track-wrap {
+			padding: var(--space-1);
+		}
+		.panel {
+			padding: var(--space-2);
+		}
+		.expr {
+			margin: 0;
+		}
+		.feedback {
+			min-height: 1.5rem;
 		}
 	}
 	.hint {
@@ -838,8 +993,10 @@
 		margin: 0 auto;
 	}
 	.key {
-		min-height: 4.2rem;
-		font-size: 1.9rem;
+		min-height: 3.6rem;
+		min-height: clamp(2.6rem, 7vh, 4.2rem);
+		font-size: 1.6rem;
+		font-size: clamp(1.4rem, 4vh, 1.9rem);
 		font-weight: 700;
 		border-radius: 0.9rem;
 		border: 2px solid #cfd6de;

@@ -2,6 +2,7 @@
 	import HintVisual from '#lib/components/race/HintVisual.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
+	import IconButton from '#lib/components/IconButton.svelte';
 	import { speak, speechBroken } from '#lib/client/speech.ts';
 	import { TROPHY_LABEL, clock } from '#lib/domain/modes.ts';
 	import { dateTime, mistakes } from '#lib/format.ts';
@@ -14,7 +15,10 @@
 <svelte:head><title>{TROPHY_LABEL[t.kind]} – Antonia</title></svelte:head>
 
 <main class="detail">
-	<p><a class="btn big" href="/ueben/vitrine">← Zur Vitrine</a></p>
+	<p class="row">
+		<IconButton icon="trophy" label="Zur Vitrine" href="/ueben/vitrine" />
+		<IconButton icon="home" label="Zur Übersicht" href="/ueben" />
+	</p>
 
 	<header class="head">
 		<div class="cup"><Trophy kind={t.kind} label /></div>
@@ -52,7 +56,9 @@
 						</p>
 						{#if task.hint}
 							<div class="hint">
-								<p><strong>Tipp:</strong> {task.hint.text}</p>
+								{#if task.hint.visual?.kind !== 'twenty'}
+									<p><strong>Tipp:</strong> {task.hint.text}</p>
+								{/if}
 								{#if task.hint.visual}<HintVisual visual={task.hint.visual} />{/if}
 								<button
 									class="btn small"

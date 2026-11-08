@@ -68,7 +68,10 @@
 				}}
 			/>
 			<span class="cup">
-				{#if trophyFor(m)}<Trophy kind={trophyFor(m)!} />{:else}<Icon name="clock" size={26} />{/if}
+				{#if trophyFor(m)}<Trophy kind={trophyFor(m)!} />{:else}<Icon
+						name="stopwatch"
+						size={26}
+					/>{/if}
 			</span>
 			<span>
 				<strong>{MODE_LABEL[m]}</strong>

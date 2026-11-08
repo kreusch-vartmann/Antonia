@@ -10,7 +10,10 @@
 
 <style>
 	.kid {
+		min-height: 100vh;
 		min-height: 100dvh;
+		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+			env(safe-area-inset-left);
 		background: #eef5ea;
 		--font-size-base: 1.25rem;
 		font-size: var(--font-size-base);

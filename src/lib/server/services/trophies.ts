@@ -58,7 +58,7 @@ export async function trophyDetail(db: Db, studentId: string, trophyId: string) 
 			const p = fmt.present(e.taskSnapshot);
 			const solution = fmt.solution(e.taskSnapshot);
 			task = {
-				text: p.parts.map((x) => (x.kind === 'text' ? x.value : solution)).join(' '),
+				text: p.parts.map((x) => (x.kind === 'gap' ? solution : x.value)).join(' '),
 				question: p.question ?? null,
 				wrong: [],
 				hint: null

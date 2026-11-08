@@ -8,7 +8,8 @@ export interface Limit {
 
 export const LOGIN_LIMITS = {
 	perUser: { max: 5, windowSeconds: 15 * 60 },
-	perIp: { max: 30, windowSeconds: 15 * 60 },
+	// A whole school class often shares one public IP address.
+	perIp: { max: 300, windowSeconds: 15 * 60 },
 	totp: { max: 5, windowSeconds: 15 * 60 }
 } satisfies Record<string, Limit>;
 

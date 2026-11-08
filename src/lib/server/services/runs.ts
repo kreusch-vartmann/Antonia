@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import type { Kv } from '../kv/types';
@@ -26,12 +26,39 @@ const { assignment, taskSet, student, run, answerEvent, trophy } = schema;
 
 const RUN_TTL = 24 * 60 * 60;
 
+/** An unfinished run can be resumed this long after the last action of the child. */
+export const RESUME_WINDOW_MS = 10 * 60_000;
+
+export type RunErrorCode =
+	| 'not_available' // assignment not active / not the child's
+	| 'mode_locked' // mode not allowed or record without best time
+	| 'no_tasks'
+	| 'no_target'
+	| 'not_found'; // run missing in Redis / belongs to another child
+
+export class RunError extends ValidationError {
+	constructor(
+		public code: RunErrorCode,
+		message: string
+	) {
+		super(message);
+	}
+}
+
 interface StoredRun {
 	runId: string;
 	studentId: string;
 	assignmentId: string;
 	setId: string;
 	engine: RunState;
+	/** Last client action (ms epoch); missing in older states = engine.startedAt. */
+	lastActionAt?: number;
+	/** Dedupe of retried requests: id and feedback of the last applied action. */
+	lastAction?: { id: string; feedback: Feedback };
+}
+
+function lastActive(s: StoredRun): number {
+	return s.lastActionAt ?? s.engine.startedAt;
 }
 
 export type ClientSettings = Pick<
@@ -123,15 +150,17 @@ export async function startOrResumeRun(
 	studentId: string,
 	assignmentId: string,
 	mode: RunMode = 'normal',
-	now = Date.now()
+	now = Date.now(),
+	opts: { fresh?: boolean } = {}
 ): Promise<RunPayload> {
 	const active = await activeAssignmentsForChild(db, studentId);
 	const available = active.find((a) => a.id === assignmentId);
-	if (!available) throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
+	if (!available) throw new RunError('not_available', 'Diese Aufgabe ist nicht verfügbar.');
 	if (!available.modes.includes(mode))
-		throw new ValidationError('Diese Rennart ist für dich gerade nicht freigegeben.');
+		throw new RunError('mode_locked', 'Diese Rennart ist für dich gerade nicht freigegeben.');
 	if (mode === 'record' && !available.best)
-		throw new ValidationError(
+		throw new RunError(
+			'mode_locked',
 			'Fahre zuerst einmal „Fehlerfrei“, dann kannst du deine Bestzeit jagen.'
 		);
 
@@ -140,7 +169,10 @@ export async function startOrResumeRun(
 		const s = await load(kv, existingId);
 		if (s && s.studentId === studentId && s.engine.status === 'running') {
 			if (tick(s.engine, now)) await persistEnd(db, kv, s);
-			else return payload(db, s, now);
+			else if (opts.fresh || now - lastActive(s) > RESUME_WINDOW_MS) {
+				abort(s.engine, now);
+				await persistEnd(db, kv, s);
+			} else return payload(db, s, now);
 		}
 	}
 
@@ -150,7 +182,7 @@ export async function startOrResumeRun(
 		.innerJoin(taskSet, eq(taskSet.id, assignment.setId))
 		.innerJoin(student, eq(student.id, assignment.studentId))
 		.where(and(eq(assignment.id, assignmentId), eq(assignment.studentId, studentId)));
-	if (!row) throw new ValidationError('Diese Aufgabe ist nicht verfügbar.');
+	if (!row) throw new RunError('not_available', 'Diese Aufgabe ist nicht verfügbar.');
 
 	const items = await db
 		.select({ item: schema.taskSetItem, task: schema.task })
@@ -158,7 +190,7 @@ export async function startOrResumeRun(
 		.innerJoin(schema.task, eq(schema.task.id, schema.taskSetItem.taskId))
 		.where(eq(schema.taskSetItem.setId, row.set.id))
 		.orderBy(asc(schema.taskSetItem.position));
-	if (items.length === 0) throw new ValidationError('Dieses Set enthält noch keine Aufgaben.');
+	if (items.length === 0) throw new RunError('no_tasks', 'Dieses Set enthält noch keine Aufgaben.');
 
 	const runLevel = resolveSettings({
 		set: row.set.settings,
@@ -166,7 +198,7 @@ export async function startOrResumeRun(
 		assignment: row.assignment.settings
 	}).values;
 	if (mode === 'time' && runLevel.targetTime <= 0)
-		throw new ValidationError('Für dieses Rennen ist keine Zielzeit eingestellt.');
+		throw new RunError('no_target', 'Für dieses Rennen ist keine Zielzeit eingestellt.');
 	const tasks = items.map(({ item, task }) => ({
 		id: task.id,
 		content: task.content,
@@ -195,18 +227,50 @@ export async function startOrResumeRun(
 			settings: engine.settings as unknown as Record<string, unknown>
 		})
 		.returning({ id: run.id });
-	const stored: StoredRun = { runId: r.id, studentId, assignmentId, setId: row.set.id, engine };
+	const stored: StoredRun = {
+		runId: r.id,
+		studentId,
+		assignmentId,
+		setId: row.set.id,
+		engine,
+		lastActionAt: now
+	};
 	await save(kv, stored);
 	await kv.set(activeKey(assignmentId, mode), r.id, RUN_TTL);
 	return payload(db, stored, now);
 }
 
+/** Read-only: an unfinished run of this assignment and mode that can still be resumed. */
+export async function findResumable(
+	kv: Kv,
+	studentId: string,
+	assignmentId: string,
+	mode: RunMode,
+	now = Date.now()
+): Promise<{ runId: string; done: number; total: number } | null> {
+	const id = await kv.get(activeKey(assignmentId, mode));
+	if (!id) return null;
+	const s = await load(kv, id);
+	if (!s || s.studentId !== studentId || s.engine.status !== 'running') return null;
+	if (now - lastActive(s) > RESUME_WINDOW_MS) return null;
+	if (mode === 'time' && now - s.engine.startedAt >= s.engine.settings.targetTime * 1000)
+		return null;
+	return { runId: s.runId, done: s.engine.done, total: s.engine.total };
+}
+
 async function persistEvents(db: Db, runId: string, events: AnswerEventDraft[]) {
 	if (events.length === 0) return;
+	// A task may have been deleted while the run was going on.
+	const ids = [...new Set(events.map((e) => e.taskId))];
+	const existing = new Set(
+		(
+			await db.select({ id: schema.task.id }).from(schema.task).where(inArray(schema.task.id, ids))
+		).map((r) => r.id)
+	);
 	await db.insert(answerEvent).values(
 		events.map((e) => ({
 			runId,
-			taskId: e.taskId,
+			taskId: existing.has(e.taskId) ? e.taskId : null,
 			taskSnapshot: e.taskSnapshot,
 			family: e.family,
 			seq: e.seq,
@@ -276,11 +340,12 @@ async function persistEnd(db: Db, kv: Kv, s: StoredRun) {
 	await save(kv, s); // keep result viewable for a while
 }
 
+/** `actionId` lets the server ignore a retried request that was already applied. */
 export type RunAction =
-	| { type: 'answer'; key: string; value: string; ms: number | null }
-	| { type: 'timeout'; key: string }
+	| { type: 'answer'; key: string; value: string; ms: number | null; actionId?: string }
+	| { type: 'timeout'; key: string; actionId?: string }
 	| { type: 'tick' }
-	| { type: 'abort' };
+	| { type: 'abort'; actionId?: string };
 
 export async function act(
 	db: Db,
@@ -292,7 +357,10 @@ export async function act(
 ): Promise<RunPayload & { feedback: Feedback }> {
 	return withLock(runId, async () => {
 		const s = await load(kv, runId);
-		if (!s || s.studentId !== studentId) throw new ValidationError('Rennen nicht gefunden.');
+		if (!s || s.studentId !== studentId) throw new RunError('not_found', 'Rennen nicht gefunden.');
+		if (action.type !== 'tick' && action.actionId && s.lastAction?.id === action.actionId) {
+			return { ...(await payload(db, s, now)), feedback: s.lastAction.feedback };
+		}
 		const wasRunning = s.engine.status === 'running';
 		let feedback: Feedback = { outcome: 'ignored' };
 		let events: AnswerEventDraft[] = [];
@@ -305,6 +373,8 @@ export async function act(
 		} else {
 			abort(s.engine, now);
 		}
+		s.lastActionAt = now;
+		if (action.type !== 'tick' && action.actionId) s.lastAction = { id: action.actionId, feedback };
 		await persistEvents(db, runId, events);
 		if (wasRunning && s.engine.status !== 'running') {
 			await persistEnd(db, kv, s);

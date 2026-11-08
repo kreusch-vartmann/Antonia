@@ -15,7 +15,7 @@ import {
 	getStudent,
 	listStudents
 } from '#lib/server/services/students.ts';
-import { createTasks } from '#lib/server/services/tasks.ts';
+import { createTasks, deleteTasks } from '#lib/server/services/tasks.ts';
 import {
 	assign,
 	createSet,
@@ -26,7 +26,14 @@ import {
 	listSets,
 	updateAssignment
 } from '#lib/server/services/sets.ts';
-import { act, startOrResumeRun, type RunPayload } from '#lib/server/services/runs.ts';
+import {
+	act,
+	findResumable,
+	RESUME_WINDOW_MS,
+	startOrResumeRun,
+	type RunPayload
+} from '#lib/server/services/runs.ts';
+import { eq } from 'drizzle-orm';
 import { listTrophies, trophyDetail } from '#lib/server/services/trophies.ts';
 import type { RunMode } from '#lib/domain/modes.ts';
 import { exportCsv, overview, studentReport } from '#lib/server/services/analytics.ts';
@@ -36,6 +43,14 @@ import { schema } from '#lib/server/db/types.ts';
 import { createSession, destroyAllSessions, validateSession } from '#lib/server/auth/session.ts';
 
 const SECRET = 'x'.repeat(40);
+
+/** The visible calculation of the current task without the gap, e.g. "1 · 5 =". */
+function exprText(p: RunPayload): string {
+	return p.view
+		.current!.presentation.parts.filter((x) => x.kind !== 'gap')
+		.map((x) => (x as { value: string }).value)
+		.join(' ');
+}
 let db: Db;
 let close: () => Promise<void>;
 let kv: MemoryKv;
@@ -110,6 +125,15 @@ describe('accounts', () => {
 		expect((await verifySecondFactor(db, kv, SECRET, t, recovery![0])).ok).toBe(false);
 	});
 
+	it('failed logins of a whole class on one school IP do not lock out a correct login', async () => {
+		await teacher();
+		for (let i = 0; i < 40; i++)
+			await login(db, kv, { username: `kind${i}`, password: 'falsch', ip: 'schule' });
+		expect(
+			await login(db, kv, { username: 'lehrerin', password: 'sehr-geheim-123', ip: 'schule' })
+		).toMatchObject({ ok: true });
+	});
+
 	it('sessions can be revoked for all devices', async () => {
 		const token = await createSession(kv, 'student', 'abc');
 		expect(await validateSession(kv, token)).toMatchObject({ userId: 'abc' });
@@ -158,7 +182,7 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		const T = Date.now();
 		let p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
 		expect(p.settings.readAloud).toBe('auto');
-		expect(p.view.current?.presentation.parts[0]).toEqual({ kind: 'text', value: '1 · 5 =' });
+		expect(exprText(p)).toBe('1 · 5 =');
 
 		// resume returns the same run
 		const again = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 500);
@@ -187,9 +211,7 @@ describe('full flow: set → assignment → race → evaluation', () => {
 		p = r;
 		while (p.view.status === 'running') {
 			const c = p.view.current!;
-			const expr = c.presentation.parts[0];
-			const value =
-				expr.kind === 'text' ? String(eval(expr.value.replace('·', '*').replace('=', ''))) : '0';
+			const value = String(eval(exprText(p).replace('·', '*').replace('=', '')));
 			p = await act(db, kv, s, p.runId, { type: 'answer', key: c.key, value, ms: 800 }, T + 4000);
 		}
 		expect(p.view.status).toBe('finished');
@@ -255,11 +277,7 @@ describe('race modes and trophies', () => {
 
 	const answerCurrent = (s: string, p: RunPayload, now: number, wrong = false) => {
 		const c = p.view.current!;
-		const expr = c.presentation.parts[0];
-		const value =
-			expr.kind === 'text' && !wrong
-				? String(eval(expr.value.replace('·', '*').replace('=', '')))
-				: '999';
+		const value = wrong ? '999' : String(eval(exprText(p).replace('·', '*').replace('=', '')));
 		return act(db, kv, s, p.runId, { type: 'answer', key: c.key, value, ms: 500 }, now);
 	};
 
@@ -544,5 +562,124 @@ describe('race modes and trophies', () => {
 			updateAssignment(db, t, a.id, { modes: ['normal', 'record'] })
 		).rejects.toBeInstanceOf(ValidationError);
 		await updateAssignment(db, t, a.id, { modes: ['flawless', 'record'] });
+	});
+});
+
+describe('resuming and retrying runs', () => {
+	async function fixture() {
+		const t = await teacher();
+		const s = await createStudent(db, t, {
+			firstName: 'Mia',
+			username: 'mia',
+			password: 'sonne12'
+		});
+		const drafts = generateMultiplicationRow({ row: 5, from: 1, to: 3 });
+		const ids = await createTasks(
+			db,
+			t,
+			drafts.map((d) => ({ content: d.content, tags: d.tags, origin: d.origin }))
+		);
+		const setId = await createSet(db, t, { name: '5er-Reihe', taskIds: ids });
+		await assign(db, t, { setId, studentIds: [s] });
+		const [a] = await activeAssignmentsForChild(db, s);
+		return { t, s, a, ids };
+	}
+	const runStatus = async (id: string) =>
+		(await db.select().from(schema.run).where(eq(schema.run.id, id)))[0].status;
+
+	it('does not resume a run that was left alone for more than 10 minutes', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		const old = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		const later = T + RESUME_WINDOW_MS + 1000;
+		expect(await findResumable(kv, s, a.id, 'normal', later)).toBeNull();
+		const next = await startOrResumeRun(db, kv, s, a.id, 'normal', later);
+		expect(next.runId).not.toBe(old.runId);
+		expect(await runStatus(old.runId)).toBe('aborted');
+	});
+
+	it('resumes a run after a short break, unless a fresh start is requested', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		const first = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		expect(await findResumable(kv, s, a.id, 'normal', T + 5 * 60_000)).toMatchObject({
+			runId: first.runId,
+			done: 0,
+			total: 3
+		});
+		const again = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 5 * 60_000);
+		expect(again.runId).toBe(first.runId);
+		const fresh = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 5 * 60_000, {
+			fresh: true
+		});
+		expect(fresh.runId).not.toBe(first.runId);
+		expect(await runStatus(first.runId)).toBe('aborted');
+	});
+
+	it('actions keep a run alive: the window starts at the last action', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		const p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		await act(db, kv, s, p.runId, { type: 'tick' }, T + 9 * 60_000);
+		const again = await startOrResumeRun(db, kv, s, a.id, 'normal', T + 15 * 60_000);
+		expect(again.runId).toBe(p.runId);
+	});
+
+	it('a retried answer with the same action id is counted once', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		const p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		const action = {
+			type: 'answer' as const,
+			key: p.view.current!.key,
+			value: '999',
+			ms: 500,
+			actionId: 'retry-1234567'
+		};
+		const r1 = await act(db, kv, s, p.runId, action, T + 1000);
+		const r2 = await act(db, kv, s, p.runId, action, T + 2000);
+		expect(r1.feedback.outcome).toBe('wrong');
+		expect(r2.feedback).toEqual(r1.feedback);
+		const events = await db
+			.select()
+			.from(schema.answerEvent)
+			.where(eq(schema.answerEvent.runId, p.runId));
+		expect(events).toHaveLength(1);
+	});
+
+	it('accepts answers although a task was deleted during the run', async () => {
+		const { s, a, t, ids } = await fixture();
+		const T = Date.now();
+		const p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		await deleteTasks(db, t, ids);
+		const r = await act(
+			db,
+			kv,
+			s,
+			p.runId,
+			{ type: 'answer', key: p.view.current!.key, value: '999', ms: 500 },
+			T + 1000
+		);
+		expect(r.feedback.outcome).toBe('wrong');
+		const [event] = await db
+			.select()
+			.from(schema.answerEvent)
+			.where(eq(schema.answerEvent.runId, p.runId));
+		expect(event.taskId).toBeNull();
+	});
+
+	it('accepts long answer times (a run left open for hours)', async () => {
+		const { s, a } = await fixture();
+		const T = Date.now();
+		const p = await startOrResumeRun(db, kv, s, a.id, 'normal', T);
+		const r = await act(
+			db,
+			kv,
+			s,
+			p.runId,
+			{ type: 'answer', key: p.view.current!.key, value: '5', ms: 5_000_000 },
+			T + 1000
+		);
+		expect(r.feedback.outcome).toBe('correct');
 	});
 });

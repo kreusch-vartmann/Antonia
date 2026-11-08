@@ -3,7 +3,15 @@
  * optional question text and a teacher-defined answer.
  */
 import { z } from 'zod';
-import type { ArithmeticContent, Gap, Hint, Op, TaskFormat } from './types';
+import type {
+	ArithmeticContent,
+	Gap,
+	Hint,
+	Op,
+	PartRole,
+	PresentationPart,
+	TaskFormat
+} from './types';
 
 export const OP_SYMBOL: Record<Op, string> = { '+': '+', '-': '−', '*': '·', ':': ':' };
 const OP_WORD: Record<Op, string> = { '+': 'plus', '-': 'minus', '*': 'mal', ':': 'geteilt durch' };
@@ -211,29 +219,35 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 	},
 
 	present(c) {
-		const parts: ({ kind: 'text'; value: string } | { kind: 'gap' })[] = [];
+		const parts: PresentationPart[] = [];
 		let speech = c.text ? c.text + ' ' : '';
 		if (c.expr) {
 			const { a, op, b, gap } = c.expr;
 			const r = computeResult(a, op, b) ?? c.answer;
 			const s = OP_SYMBOL[op];
 			const w = OP_WORD[op];
+			// Only plus and minus are coloured (first number blue, second red).
+			const coloured = op === '+' || op === '-';
+			const roleA: PartRole = coloured ? 'a' : 'result';
+			const roleB: PartRole = coloured ? 'b' : 'result';
+			const num = (v: number, role: PartRole): PresentationPart => ({
+				kind: 'num',
+				value: String(v),
+				role
+			});
+			const sym = (value: string): PresentationPart => ({ kind: 'op', value });
 			if (gap === 'result') {
-				parts.push({ kind: 'text', value: `${a} ${s} ${b} =` }, { kind: 'gap' });
+				parts.push(num(a, roleA), sym(s), num(b, roleB), sym('='), { kind: 'gap', role: 'result' });
 				speech += `${a} ${w} ${b} ist gleich wie viel?`;
 			} else if (gap === 'a') {
-				parts.push({ kind: 'gap' }, { kind: 'text', value: `${s} ${b} = ${r}` });
+				parts.push({ kind: 'gap', role: roleA }, sym(s), num(b, roleB), sym('='), num(r, 'result'));
 				speech += `Wie viel ${w} ${b} ist gleich ${r}?`;
 			} else {
-				parts.push(
-					{ kind: 'text', value: `${a} ${s}` },
-					{ kind: 'gap' },
-					{ kind: 'text', value: `= ${r}` }
-				);
+				parts.push(num(a, roleA), sym(s), { kind: 'gap', role: roleB }, sym('='), num(r, 'result'));
 				speech += `${a} ${w} wie viel ist gleich ${r}?`;
 			}
 		} else {
-			parts.push({ kind: 'gap' });
+			parts.push({ kind: 'gap', role: 'result' });
 		}
 		return { question: c.text, parts, speech: speech.trim() };
 	},

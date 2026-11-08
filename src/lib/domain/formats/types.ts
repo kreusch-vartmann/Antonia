@@ -39,12 +39,24 @@ export interface Hint {
 	visual?: HintVisual;
 }
 
+/**
+ * Role of a number in a plus/minus task, used for colours: first number blue (`a`),
+ * second number and its decomposition red (`b`, `part`), everything else neutral.
+ */
+export type PartRole = 'a' | 'b' | 'result' | 'part';
+
+export type PresentationPart =
+	| { kind: 'num'; value: string; role: PartRole }
+	| { kind: 'op'; value: string }
+	| { kind: 'text'; value: string }
+	| { kind: 'gap'; role: PartRole };
+
 /** What the child sees. Contains no solution. */
 export interface Presentation {
 	/** Optional question text shown above the expression. */
 	question?: string;
 	/** Expression parts; `gap` marks the input slot. */
-	parts: ({ kind: 'text'; value: string } | { kind: 'gap' })[];
+	parts: PresentationPart[];
 	/** Text for speech synthesis. */
 	speech: string;
 	/** Answer options in choice mode. */

@@ -1,13 +1,16 @@
 /** Browser text-to-speech (Web Speech API), German. */
 import { writable } from 'svelte/store';
 
-/**
- * True when speech output really does not work on this device: no speech API, no
- * voice installed, or an attempt to speak did not start. Buttons are disabled then.
- */
+/** True when the device has no speech API at all. Speech buttons are disabled then. */
 export const speechBroken = writable(false);
 
-let voice: SpeechSynthesisVoice | null | undefined;
+/**
+ * True when speaking was tried but stayed silent (no voice, muted device, …).
+ * Only used for a small hint, speech is never switched off for good.
+ */
+export const speechSilent = writable(false);
+
+let voice: SpeechSynthesisVoice | null = null;
 
 function pickVoice(): SpeechSynthesisVoice | null {
 	if (typeof speechSynthesis === 'undefined') return null;
@@ -15,7 +18,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
 	return (
 		voices.find((v) => v.lang === 'de-DE' && /female|anna|petra|helena|katja/i.test(v.name)) ??
 		voices.find((v) => v.lang === 'de-DE') ??
-		voices.find((v) => v.lang.startsWith('de')) ??
+		voices.find((v) => v.lang.replace('_', '-').startsWith('de')) ??
 		null
 	);
 }
@@ -26,73 +29,92 @@ export function speechAvailable(): boolean {
 
 // Keep a reference: some browsers drop an utterance that gets garbage collected while speaking.
 const active = new Set<SpeechSynthesisUtterance>();
-let broken = false;
-speechBroken.subscribe((b) => (broken = b));
 
-function say(text: string, rate: number) {
+function say(text: string, rate: number, retry: boolean) {
 	const u = new SpeechSynthesisUtterance(text.replace(/·/g, ' mal ').replace(/−/g, ' minus '));
 	u.lang = 'de-DE';
 	u.rate = rate;
+	voice ??= pickVoice();
 	if (voice) u.voice = voice;
 	active.add(u);
 	let started = false;
 	u.onstart = () => {
 		started = true;
-		speechBroken.set(false);
+		speechSilent.set(false);
 	};
 	u.onend = () => active.delete(u);
 	u.onerror = (e) => {
 		active.delete(u);
 		if (e.error !== 'canceled' && e.error !== 'interrupted') {
 			console.warn('speech synthesis failed:', e.error);
-			speechBroken.set(true);
+			speechSilent.set(true);
 		}
 	};
 	speechSynthesis.resume();
 	speechSynthesis.speak(u);
-	// Chromium without a speech engine (e.g. Linux without speech-dispatcher) stays silent without an error.
+	// Some engines stay silent without an error: try once more, then only show a hint.
 	setTimeout(() => {
-		if (!started && active.has(u)) {
+		if (started || !active.has(u)) return;
+		active.delete(u);
+		if (retry) {
+			speechSynthesis.cancel();
+			say(text, rate, false);
+		} else {
 			console.warn('speech synthesis did not start: no speech engine or voice available?');
-			speechBroken.set(true);
+			speechSilent.set(true);
 		}
-	}, 2000);
+	}, 1500);
 }
 
 export function speak(text: string, rate = 0.9) {
-	if (!speechAvailable() || broken || !text) return;
-	if (!voice) voice = pickVoice();
-	if (speechSynthesis.speaking || speechSynthesis.pending) {
-		// Some browsers silently drop a speak() that directly follows cancel().
-		speechSynthesis.cancel();
-		setTimeout(() => say(text, rate), 80);
-	} else {
-		say(text, rate);
-	}
+	if (!speechAvailable() || !text) return;
+	// No timeout between cancel() and speak(): on iOS the call must stay inside the tap.
+	if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+	say(text, rate, true);
+}
+
+/** For the device check page. */
+export function speechInfo() {
+	if (!speechAvailable()) return { available: false, voices: 0, voice: '' };
+	return {
+		available: true,
+		voices: speechSynthesis.getVoices().length,
+		voice: (voice ?? pickVoice())?.name ?? ''
+	};
 }
 
 export function stopSpeaking() {
 	if (speechAvailable()) speechSynthesis.cancel();
 }
 
-/** Decide early, without any click, whether speech output can work at all. */
-function detect() {
-	if (!speechAvailable()) {
-		speechBroken.set(true);
-		return;
-	}
-	const check = () => {
-		voice = pickVoice();
-		if (speechSynthesis.getVoices().length > 0) speechBroken.set(false);
-	};
-	check();
-	speechSynthesis.addEventListener?.('voiceschanged', check);
-	// Chromium loads the voices asynchronously; an empty list afterwards means: no voice installed.
-	if (speechSynthesis.getVoices().length === 0) {
-		setTimeout(() => {
-			if (speechSynthesis.getVoices().length === 0) speechBroken.set(true);
-		}, 2000);
+let unlocked = false;
+
+/** Call inside a tap handler: iOS only allows speech after a first speak() during a gesture. */
+export function unlockSpeech() {
+	if (unlocked || !speechAvailable()) return;
+	unlocked = true;
+	try {
+		const u = new SpeechSynthesisUtterance(' ');
+		u.volume = 0;
+		u.lang = 'de-DE';
+		speechSynthesis.speak(u);
+	} catch {
+		unlocked = false;
 	}
 }
 
-if (typeof window !== 'undefined') detect();
+if (typeof window !== 'undefined') {
+	if (!speechAvailable()) {
+		speechBroken.set(true);
+	} else {
+		// The list of voices is loaded asynchronously and may stay empty on iOS although speech works.
+		const refresh = () => {
+			voice = pickVoice() ?? voice;
+		};
+		refresh();
+		speechSynthesis.addEventListener?.('voiceschanged', refresh);
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) stopSpeaking();
+		});
+	}
+}

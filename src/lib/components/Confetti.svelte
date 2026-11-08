@@ -64,7 +64,7 @@
 		}
 		100% {
 			opacity: 0;
-			transform: translate(var(--drift), 110dvh) rotate(var(--spin));
+			transform: translate(var(--drift), 110vh) rotate(var(--spin));
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

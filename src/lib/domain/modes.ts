@@ -42,7 +42,7 @@ export const MODE_LABEL: Record<RunMode, string> = {
 export const MODE_HELP: Record<RunMode, string> = {
 	normal: 'Löse die Aufgaben. Fehler sind erlaubt.',
 	flawless: 'Fahre ohne einen Fehler ins Ziel. Sonst gibt es einen Motorschaden.',
-	record: 'Fahre fehlerfrei und sei schneller als deine Bestzeit. Dein Geisterauto fährt mit.',
+	record: 'Fahre fehlerfrei und sei schneller als deine Bestzeit.',
 	time: 'Sei schneller als der Zeitmonstertruck. Fehler sind erlaubt.'
 };
 

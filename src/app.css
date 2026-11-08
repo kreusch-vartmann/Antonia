@@ -28,6 +28,13 @@
 	--touch-min: 3.5rem;
 
 	--motion-duration: 400ms;
+
+	/* Antonia is light only; a dark system theme must not change form controls. */
+	color-scheme: light;
+
+	/* First number blue, second number red (also the parts of a decomposed second number). */
+	--color-num-a: #1f5fbf;
+	--color-num-b: #c62828;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -73,9 +80,32 @@ textarea {
 	font: inherit;
 }
 
+button,
+input,
+select,
+textarea {
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+	-webkit-appearance: auto;
+	appearance: auto;
+}
+
+html {
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* Same look for plain buttons on every device (classes below override this). */
 button {
 	min-height: var(--touch-min);
 	touch-action: manipulation;
+	background: #fff;
+	border: 1px solid var(--color-border);
+	border-radius: 0.6rem;
+	color: var(--color-text);
 }
 
 .visually-hidden {
@@ -92,6 +122,7 @@ button {
 
 /* ---------- Layout-Helfer ---------- */
 .center-page {
+	min-height: 100vh;
 	min-height: 100dvh;
 	display: grid;
 	place-items: center;
@@ -166,6 +197,12 @@ textarea {
 }
 textarea {
 	min-height: 5rem;
+}
+select {
+	padding-right: 2.2rem;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b6168' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.8rem center;
 }
 input[type='checkbox'],
 input[type='radio'] {

@@ -9,7 +9,30 @@ const mul = (a: number, b: number, gap: 'result' | 'a' | 'b' = 'result'): Arithm
 	answer: gap === 'a' ? a : gap === 'b' ? b : a * b
 });
 
+const add = (
+	a: number,
+	b: number,
+	op: '+' | '-' = '+',
+	gap: 'result' | 'a' | 'b' = 'result'
+): ArithmeticContent => ({
+	format: 'arithmetic',
+	expr: { a, op, b, gap },
+	answer: gap === 'a' ? a : gap === 'b' ? b : op === '+' ? a + b : a - b
+});
+
 describe('arithmetic format', () => {
+	it('colours plus and minus: first number blue, second number red', () => {
+		const plus = arithmetic.present(add(8, 7)).parts;
+		expect(plus.filter((x) => x.kind === 'num').map((x) => x.role)).toEqual(['a', 'b']);
+		const minus = arithmetic.present(add(15, 7, '-')).parts;
+		expect(minus.filter((x) => x.kind === 'num').map((x) => x.role)).toEqual(['a', 'b']);
+		// gap in place of the second number keeps its role (red underline)
+		const gapB = arithmetic.present(add(8, 7, '+', 'b')).parts;
+		expect(gapB.find((x) => x.kind === 'gap')).toEqual({ kind: 'gap', role: 'b' });
+		const gapA = arithmetic.present(add(8, 7, '+', 'a')).parts;
+		expect(gapA.find((x) => x.kind === 'gap')).toEqual({ kind: 'gap', role: 'a' });
+	});
+
 	it('validates and rejects invalid tasks', () => {
 		expect(arithmetic.validate(mul(3, 5)).ok).toBe(true);
 		expect(arithmetic.validate({ format: 'arithmetic', answer: 3 }).ok).toBe(false);
@@ -34,10 +57,17 @@ describe('arithmetic format', () => {
 
 	it('presents gaps correctly without revealing the answer', () => {
 		const p = arithmetic.present(mul(3, 5, 'a'));
-		expect(p.parts).toEqual([{ kind: 'gap' }, { kind: 'text', value: '· 5 = 15' }]);
+		expect(p.parts).toEqual([
+			{ kind: 'gap', role: 'result' },
+			{ kind: 'op', value: '·' },
+			{ kind: 'num', value: '5', role: 'result' },
+			{ kind: 'op', value: '=' },
+			{ kind: 'num', value: '15', role: 'result' }
+		]);
 		expect(p.speech).toBe('Wie viel mal 5 ist gleich 15?');
 		const q = arithmetic.present(mul(3, 5));
-		expect(q.parts[0]).toEqual({ kind: 'text', value: '3 · 5 =' });
+		expect(q.parts[0]).toEqual({ kind: 'num', value: '3', role: 'result' });
+		expect(q.parts.at(-1)).toEqual({ kind: 'gap', role: 'result' });
 		expect(q.speech).not.toContain('15');
 	});
 

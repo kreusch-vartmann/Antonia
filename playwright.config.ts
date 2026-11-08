@@ -15,7 +15,21 @@ export default defineConfig({
 	},
 	projects: [
 		{ name: 'ipad', use: { ...devices['iPad Pro 11 landscape'], browserName: 'chromium' } },
-		{ name: 'desktop', use: { ...devices['Desktop Chrome'] } }
+		{ name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+		// Safari engine: only in CI, WebKit cannot be installed on every development machine.
+		// The long flow test uses fixed names and runs once (project "ipad"); these only check the layout.
+		{
+			name: 'ipad-webkit',
+			use: { ...devices['iPad (gen 7) landscape'] },
+			testIgnore: /flow\.e2e/
+		},
+		{
+			name: 'ipad-webkit-portrait',
+			use: { ...devices['iPad (gen 7)'] },
+			testIgnore: /flow\.e2e/
+		},
+		{ name: 'iphone-webkit', use: { ...devices['iPhone 13'] }, testIgnore: /flow\.e2e/ },
+		{ name: 'iphone-se-webkit', use: { ...devices['iPhone SE'] }, testIgnore: /flow\.e2e/ }
 	],
 	webServer: external ? undefined : { command: 'npm run build && npm run preview', port: 4173 }
 });

@@ -13,6 +13,10 @@
 		{#if page.error?.errorId && page.status >= 500}
 			<p class="muted small">Fehler-Nr.: {page.error.errorId}</p>
 		{/if}
-		<p><a class="btn btn-primary" href="/">Zur Startseite</a></p>
+		{#if page.url.pathname.startsWith('/ueben')}
+			<p><a class="btn btn-primary" href="/ueben">Zur Übersicht</a></p>
+		{:else}
+			<p><a class="btn btn-primary" href="/">Zur Startseite</a></p>
+		{/if}
 	</div>
 </main>

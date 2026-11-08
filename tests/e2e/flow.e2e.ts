@@ -99,7 +99,9 @@ test('child races and finishes', async ({ page }) => {
 	await a11y(page);
 
 	await page.getByRole('link', { name: 'Einmaleins 5er-Reihe – Normal' }).click();
-	await expect(page.getByText('1 · 5 =')).toBeVisible();
+	// the race only starts with "Los!" (and a short countdown)
+	await page.getByRole('button', { name: 'Los!' }).click();
+	await expect(page.getByText('1 · 5 =')).toBeVisible({ timeout: 15_000 });
 
 	// wrong answer → hint (Boxenstopp)
 	await page.getByRole('button', { name: '9', exact: true }).click();

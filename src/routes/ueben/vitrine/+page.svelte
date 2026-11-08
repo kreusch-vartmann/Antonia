@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Trophy from '#lib/components/Trophy.svelte';
+	import IconButton from '#lib/components/IconButton.svelte';
 	import { clock } from '#lib/domain/modes.ts';
 	import { dateTime, mistakes } from '#lib/format.ts';
 	import type { PageProps } from './$types';
@@ -10,7 +11,7 @@
 <svelte:head><title>Vitrine – Antonia</title></svelte:head>
 
 <main class="case">
-	<p><a class="btn big" href="/ueben">← Zurück</a></p>
+	<p><IconButton icon="home" label="Zur Übersicht" href="/ueben" /></p>
 	<h1>Deine Vitrine</h1>
 
 	{#if data.trophies.length === 0}

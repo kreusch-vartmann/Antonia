@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import RaceCar from '#lib/components/race/RaceCar.svelte';
+	import IconButton from '#lib/components/IconButton.svelte';
+	import { unlockMedia } from '#lib/client/media.ts';
 	import { CAR_COLORS, CAR_MODELS } from '#lib/domain/cars.ts';
 	import type { PageProps } from './$types';
 
@@ -14,7 +16,10 @@
 <svelte:head><title>Garage – Antonia</title></svelte:head>
 
 <main class="garage">
-	<p><a class="btn big" href="/ueben">← Zurück</a></p>
+	<p class="row">
+		<IconButton icon="home" label="Zur Übersicht" href="/ueben" />
+		<IconButton icon="gear" label="Gerätetest" href="/ueben/technik" />
+	</p>
 	<h1>Deine Garage</h1>
 
 	<div class="preview"><RaceCar {model} {color} size={260} label="Dein Auto" /></div>
@@ -63,7 +68,7 @@
 			</div>
 		</fieldset>
 		{#if form?.saved}<p class="success" role="status">Gespeichert! Dein Auto steht bereit.</p>{/if}
-		<div><button class="btn btn-primary big">Speichern</button></div>
+		<div><button class="btn btn-primary big" onclick={unlockMedia}>Speichern</button></div>
 	</form>
 </main>
 

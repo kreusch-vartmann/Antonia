@@ -106,6 +106,11 @@
 </section>
 
 <section class="card stack">
+	<h2>Gerät</h2>
+	<p><a class="btn" href="/lehrkraft/technik">Gerätetest (Ton &amp; Vorlesen)</a></p>
+</section>
+
+<section class="card stack">
 	<h2>Protokoll (letzte Aktionen)</h2>
 	<table>
 		<tbody>

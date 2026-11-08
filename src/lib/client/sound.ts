@@ -6,7 +6,8 @@ function audio(): AudioContext | null {
 	if (typeof window === 'undefined') return null;
 	try {
 		ctx ??= new AudioContext();
-		if (ctx.state === 'suspended') void ctx.resume();
+		// iOS may leave the context in "interrupted" (e.g. after a phone call), not only "suspended".
+		if (ctx.state !== 'running') void ctx.resume();
 		return ctx;
 	} catch {
 		return null;
@@ -35,10 +36,21 @@ function tone(
 	o.stop(t + dur + 0.05);
 }
 
+/** State of the audio system, for the device check page. */
+export function audioState(): string {
+	return ctx?.state ?? 'noch nicht gestartet';
+}
+
 export const sounds = {
 	/** Unlock audio on first user interaction (iOS). */
 	unlock() {
-		audio();
+		const c = audio();
+		if (!c) return;
+		// Playing a (silent) buffer inside the tap really starts audio on iOS.
+		const src = c.createBufferSource();
+		src.buffer = c.createBuffer(1, 1, 22050);
+		src.connect(c.destination);
+		src.start(0);
 	},
 	correct() {
 		tone(523.25, 0, 0.18);
@@ -54,3 +66,9 @@ export const sounds = {
 		tone(880, 0, 0.05, 0.03);
 	}
 };
+
+if (typeof document !== 'undefined') {
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') void ctx.resume();
+	});
+}

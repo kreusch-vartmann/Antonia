@@ -1,5 +1,7 @@
 <script lang="ts">
 	import RaceCar from '#lib/components/race/RaceCar.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import IconButton from '#lib/components/IconButton.svelte';
 	import Trophy from '#lib/components/Trophy.svelte';
 	import { MODE_HELP, MODE_LABEL, clock, clockPrecise, trophyFor } from '#lib/domain/modes.ts';
 	import { date } from '#lib/format.ts';
@@ -17,9 +19,11 @@
 			<h1>Hallo {data.me.displayName}!</h1>
 		</div>
 		<div class="row">
-			<a class="btn big" href="/ueben/vitrine">Vitrine</a>
-			<a class="btn big" href="/ueben/garage">Garage</a>
-			<form method="POST" action="/logout"><button class="btn big">Abmelden</button></form>
+			<IconButton icon="trophy" label="Vitrine" href="/ueben/vitrine" />
+			<IconButton icon="car" label="Garage" href="/ueben/garage" />
+			<form method="POST" action="/logout">
+				<IconButton icon="logout" label="Abmelden" type="submit" />
+			</form>
 		</div>
 	</header>
 
@@ -44,6 +48,7 @@
 							{@const kind = trophyFor(v.mode)}
 							{#if v.mode === 'record' && !v.best}
 								<div class="mode record locked">
+									<span class="cup"><Icon name="stopwatch" size={34} /></span>
 									<span class="mode-text">
 										<strong>{label}</strong>
 										<small
@@ -54,12 +59,17 @@
 							{:else}
 								<a
 									class="mode {kind ?? 'record'}"
+									data-sveltekit-preload-data="off"
 									href="/ueben/rennen/{v.assignmentId}?mode={v.mode}"
 									aria-label={v.mode === 'record' && v.best
 										? `${r.setName} – ${label}, Bestzeit ${clockPrecise(v.best.durationMs)} vom ${date(v.best.at)}`
 										: `${r.setName} – ${label}, ${v.stars} Sterne`}
 								>
-									{#if kind}<span class="cup"><Trophy {kind} /></span>{/if}
+									{#if kind}
+										<span class="cup"><Trophy {kind} /></span>
+									{:else}
+										<span class="cup"><Icon name="stopwatch" size={34} /></span>
+									{/if}
 									<span class="mode-text">
 										<strong>{label}</strong>
 										<small>
@@ -183,6 +193,11 @@
 	.cup {
 		flex: none;
 		width: 2.2rem;
+		display: flex;
+		justify-content: center;
+	}
+	.mode.record .cup {
+		color: #5b8fd9;
 	}
 	.mode-text {
 		display: flex;
