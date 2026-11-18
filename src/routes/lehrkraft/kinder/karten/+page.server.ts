@@ -12,6 +12,7 @@ import { destroyAllSessions } from '#lib/server/auth/session.ts';
 import { qrSvg } from '#lib/server/auth/totp.ts';
 import { isUuid, strs } from '#lib/server/forms.ts';
 import { fail } from '@sveltejs/kit';
+import { listGroups } from '#lib/server/services/groups.ts';
 
 /** Only the children of the teacher (not the ones shared with them) get cards. */
 export const load: PageServerLoad = async (event) => {
@@ -31,6 +32,7 @@ export const load: PageServerLoad = async (event) => {
 	const preselected = event.url.searchParams.get('id');
 	return {
 		cards,
+		groups: await listGroups(db(), teacherId),
 		preselected: preselected && isUuid(preselected) ? preselected : null
 	};
 };

@@ -6,13 +6,13 @@
  * - A child can be shared with other teachers: they see it, assign their own sets and
  *   evaluate it, but cannot manage it.
  */
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { ValidationError } from './accounts';
 import { audit } from './audit';
 
-const { student, teacher, studentTeacher } = schema;
+const { student, teacher, studentTeacher, studentGroup, studentGroupMember } = schema;
 
 export type StudentAccess = 'owner' | 'shared';
 
@@ -65,6 +65,21 @@ export async function unshareStudent(
 	await db
 		.delete(studentTeacher)
 		.where(and(eq(studentTeacher.studentId, studentId), eq(studentTeacher.teacherId, teacherId)));
+	// the other teacher can no longer see the child, so it leaves their groups
+	await db
+		.delete(studentGroupMember)
+		.where(
+			and(
+				eq(studentGroupMember.studentId, studentId),
+				inArray(
+					studentGroupMember.groupId,
+					db
+						.select({ id: studentGroup.id })
+						.from(studentGroup)
+						.where(eq(studentGroup.teacherId, teacherId))
+				)
+			)
+		);
 	await audit(db, ownerId, 'student.unshare', 'student', studentId);
 }
 

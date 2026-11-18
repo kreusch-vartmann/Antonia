@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import SettingsEditor from '#lib/components/SettingsEditor.svelte';
 	import ModePicker from '#lib/components/ModePicker.svelte';
+	import GroupPicker from '#lib/components/GroupPicker.svelte';
+	import { sectionsByClass } from '#lib/domain/groups.ts';
 	import { MODE_LABEL } from '#lib/domain/modes.ts';
 	import { resolveSettings } from '#lib/domain/settings.ts';
 	import { date, fullName, stars } from '#lib/format.ts';
@@ -10,6 +12,8 @@
 	let { data, form }: PageProps = $props();
 	const setResolved = $derived(resolveSettings({}));
 	let pickerKey = $state(0);
+	let selectedStudents = $state<string[]>([]);
+	const sections = $derived(sectionsByClass(data.students, data.groups));
 	const forAssignment = $derived(resolveSettings({ set: data.set.settings }));
 	const keep =
 		() =>
@@ -42,6 +46,9 @@
 				title="Einstellungen für dieses Set"
 			/>
 		{/key}
+		<label class="row">
+			<input type="checkbox" name="rememberDisplay" /> Material und Farben auch für neue Sets verwenden
+		</label>
 		{#if form?.saved === 'set'}<p class="success" role="status">Gespeichert.</p>{/if}
 		{#if form?.error}<p class="error">{form.error}</p>{/if}
 		<div><button class="btn btn-primary">Speichern</button></div>
@@ -150,20 +157,33 @@
 			method="POST"
 			action="?/assign"
 			use:enhance={() =>
-				async ({ update }) => {
+				async ({ result, update }) => {
 					await update();
 					pickerKey++;
+					if (result.type === 'success') selectedStudents = [];
 				}}
 			class="stack"
 		>
 			<h3>Neu zuweisen</h3>
-			<div class="row">
-				{#each data.students as s (s.id)}
-					<label class="row"
-						><input type="checkbox" name="studentId" value={s.id} /> {fullName(s)}</label
-					>
-				{/each}
-			</div>
+			<GroupPicker groups={data.groups} bind:selected={selectedStudents} />
+			{#each sections as sec (sec.key)}
+				<div class="class-block">
+					{#if sec.name}<strong class="class-title">{sec.name}</strong>{/if}
+					<div class="row">
+						{#each sec.students as s (s.id)}
+							<label class="row"
+								><input
+									type="checkbox"
+									name="studentId"
+									value={s.id}
+									bind:group={selectedStudents}
+								/>
+								{fullName(s)}</label
+							>
+						{/each}
+					</div>
+				</div>
+			{/each}
 			<div class="grid-2">
 				<label class="field"><span>Ab (optional)</span><input type="date" name="startsOn" /></label>
 				<label class="field"><span>Bis (optional)</span><input type="date" name="endsOn" /></label>
@@ -188,6 +208,11 @@
 </section>
 
 <style>
+	.class-block {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
 	section {
 		margin-top: var(--space-6);
 	}

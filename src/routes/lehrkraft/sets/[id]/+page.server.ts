@@ -11,8 +11,10 @@ import {
 	updateSet
 } from '#lib/server/services/sets.ts';
 import { listStudents } from '#lib/server/services/students.ts';
+import { listGroups } from '#lib/server/services/groups.ts';
 import { guarded, isUuid, str, strs } from '#lib/server/forms.ts';
-import { layerFromForm } from '#lib/domain/settings.ts';
+import { DISPLAY_KEYS, layerFromForm } from '#lib/domain/settings.ts';
+import { updatePreferences } from '#lib/server/services/preferences.ts';
 import { cleanModes } from '#lib/domain/modes.ts';
 import { formatOf } from '#lib/domain/formats/index.ts';
 
@@ -21,10 +23,11 @@ export const load: PageServerLoad = async (event) => {
 	if (!isUuid(event.params.id)) error(404, 'Nicht gefunden');
 	const set = await getSet(db(), teacherId, event.params.id);
 	if (!set) error(404, 'Nicht gefunden');
-	const [items, assignments, students] = await Promise.all([
+	const [items, assignments, students, groups] = await Promise.all([
 		getSetItems(db(), set.id),
 		listAssignmentsForSet(db(), teacherId, set.id),
-		listStudents(db(), teacherId)
+		listStudents(db(), teacherId),
+		listGroups(db(), teacherId)
 	]);
 	return {
 		set,
@@ -36,7 +39,8 @@ export const load: PageServerLoad = async (event) => {
 			decompose: i.task.content.decompose ?? null
 		})),
 		assignments,
-		students
+		students,
+		groups
 	};
 };
 
@@ -49,11 +53,18 @@ export const actions: Actions = {
 		const teacherId = requireTeacher(event);
 		const form = await event.request.formData();
 		return guarded(async () => {
+			const settings = layerFromForm(form);
 			await updateSet(db(), teacherId, event.params.id, {
 				name: str(form, 'name'),
 				description: str(form, 'description'),
-				settings: layerFromForm(form)
+				settings
 			});
+			if (form.get('rememberDisplay') === 'on') {
+				const display = Object.fromEntries(
+					Object.entries(settings).filter(([k]) => (DISPLAY_KEYS as readonly string[]).includes(k))
+				);
+				await updatePreferences(db(), teacherId, { setDefaults: display });
+			}
 			return { saved: 'set' };
 		});
 	},

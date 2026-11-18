@@ -14,6 +14,7 @@ import type {
 	StepProgress,
 	TaskFormat
 } from './types';
+import { fieldSize } from '../visuals';
 
 export const OP_SYMBOL: Record<Op, string> = { '+': '+', '-': '−', '*': '·', ':': ':' };
 const OP_WORD: Record<Op, string> = { '+': 'plus', '-': 'minus', '*': 'mal', ':': 'geteilt durch' };
@@ -42,13 +43,22 @@ export const arithmeticSchema = z
 		answer: int,
 		distractors: z.array(int).max(6).optional(),
 		hint: z.string().trim().max(500).optional(),
-		decompose: z.enum(['boxes', 'equation']).optional()
+		decompose: z.enum(['boxes', 'equation']).optional(),
+		withRemainder: z.boolean().optional()
 	})
 	.superRefine((c, ctx) => {
 		if (!c.expr && !c.text) {
 			ctx.addIssue({ code: 'custom', message: 'Rechenausdruck oder Fragetext erforderlich' });
 		}
-		if (c.expr) {
+		if (
+			c.withRemainder &&
+			(!c.expr || c.expr.op !== ':' || c.expr.gap !== 'result' || c.expr.b === 0)
+		) {
+			ctx.addIssue({
+				code: 'custom',
+				message: 'Rest gibt es nur bei Geteiltaufgaben, bei denen das Ergebnis gesucht ist.'
+			});
+		} else if (c.expr && !c.withRemainder) {
 			const r = computeResult(c.expr.a, c.expr.op, c.expr.b);
 			if (r === null) {
 				ctx.addIssue({
@@ -76,8 +86,18 @@ export function computeResult(a: number, op: Op, b: number): number | null {
 	}
 }
 
-/** The mathematically expected answer for an expression with a gap. */
-export function expectedAnswer(expr: { a: number; op: Op; b: number; gap: Gap }): number | null {
+/** Quotient and remainder of a : b, or null for b = 0. */
+export function divide(a: number, b: number): { q: number; r: number } | null {
+	return b > 0 ? { q: Math.floor(a / b), r: a % b } : null;
+}
+
+/** The mathematically expected answer for an expression with a gap (the quotient with remainder). */
+export function expectedAnswer(
+	expr: { a: number; op: Op; b: number; gap: Gap },
+	withRemainder = false
+): number | null {
+	if (withRemainder && expr.op === ':' && expr.gap === 'result')
+		return divide(expr.a, expr.b)?.q ?? null;
 	if (expr.gap === 'a') return expr.a;
 	if (expr.gap === 'b') return expr.b;
 	return computeResult(expr.a, expr.op, expr.b);
@@ -100,10 +120,30 @@ export function checkConsistency(input: {
 	b: number | null;
 	gap: Gap;
 	answer: number | null;
+	withRemainder?: boolean;
 }): Consistency {
 	const { a, op, b, gap, answer } = input;
 	if (a === null || b === null || ![a, b].every((n) => Number.isFinite(n))) {
 		return { status: 'incomplete' };
+	}
+	if (input.withRemainder && op === ':') {
+		const d = gap === 'result' ? divide(a, b) : null;
+		if (!d) {
+			return {
+				status: 'invalid',
+				message:
+					gap !== 'result'
+						? 'Rest gibt es nur, wenn das Ergebnis gesucht ist.'
+						: `${a} : ${b} geht nicht (Teiler ist 0).`
+			};
+		}
+		if (answer === null || !Number.isFinite(answer)) return { status: 'incomplete' };
+		if (answer === d.q) return { status: 'ok' };
+		return {
+			status: 'mismatch',
+			correct: d.q,
+			message: `${a} : ${b} = ${d.q} Rest ${d.r}, nicht ${answer}.`
+		};
 	}
 	const r = computeResult(a, op, b);
 	if (r === null) {
@@ -111,7 +151,7 @@ export function checkConsistency(input: {
 			status: 'invalid',
 			message:
 				op === ':'
-					? `${a} : ${b} geht nicht ohne Rest auf (oder Teiler ist 0).`
+					? `${a} : ${b} geht nicht ohne Rest auf (oder Teiler ist 0). Mit „mit Rest“ ist es möglich.`
 					: `${a} − ${b} ergäbe eine negative Zahl.`
 		};
 	}
@@ -175,36 +215,22 @@ function multiplicationHint(a: number, b: number): Hint {
 	return { text: `Zerlege die Aufgabe in leichtere Malaufgaben.`, visual };
 }
 
-function additionHint(a: number, op: '+' | '-', b: number, r: number): Hint {
-	const max = Math.max(a, b, r);
-	const within20 = max <= 20;
-	const visual = within20
-		? { kind: 'twenty' as const, size: max <= 10 ? (10 as const) : (20 as const), a, b, op }
-		: undefined;
-	if (op === '+') {
-		if (within20 && a < 10 && r > 10) {
-			return {
-				text: `Rechne erst bis 10: ${a} + ${10 - a} = 10. Dann noch ${b - (10 - a)} dazu.`,
-				visual
-			};
-		}
-		if (b >= 10 && b % 10 !== 0) {
-			const t = b - (b % 10);
-			return { text: `Erst die Zehner: ${a} + ${t}. Dann die Einer: + ${b % 10}.`, visual };
-		}
-		return { text: `Lege erst ${a} Plättchen, dann ${b} dazu.`, visual };
-	}
-	if (within20 && a > 10 && r < 10) {
-		return {
-			text: `Rechne erst bis 10: ${a} − ${a - 10} = 10. Dann noch ${b - (a - 10)} weg.`,
-			visual
-		};
-	}
-	if (b >= 10 && b % 10 !== 0) {
-		const t = b - (b % 10);
-		return { text: `Erst die Zehner: ${a} − ${t}. Dann die Einer: − ${b % 10}.`, visual };
-	}
-	return { text: `Lege ${a} Plättchen und nimm ${b} weg.`, visual };
+function fieldVisual(a: number, op: Op, b: number): Hint['visual'] {
+	if ((op !== '+' && op !== '-') || fieldSize(a, op, b) === null) return undefined;
+	return { kind: 'field', a, b, op };
+}
+
+/** Plus/minus with a number over 100: no automatic hint. */
+function noAutoHint(a: number, op: Op, b: number): boolean {
+	if (op !== '+' && op !== '-') return false;
+	const r = computeResult(a, op, b);
+	return r !== null && Math.max(a, b, r) > 100;
+}
+
+/** Plus/minus hint: only the picture, no explaining text. */
+function additionHint(a: number, op: '+' | '-', b: number): Hint | null {
+	const visual = fieldVisual(a, op, b);
+	return visual ? { text: '', visual } : null;
 }
 
 /**
@@ -231,50 +257,41 @@ function splitOf(c: ArithmeticContent): [number, number] | null {
 	return decomposition(c.expr.a, c.expr.op, c.expr.b);
 }
 
+/** Quotient and remainder if this is a division with remainder. */
+function remainderOf(c: ArithmeticContent): { q: number; r: number } | null {
+	if (!c.withRemainder || !c.expr || c.expr.op !== ':' || c.expr.gap !== 'result') return null;
+	return divide(c.expr.a, c.expr.b);
+}
+
 function stepCount(c: ArithmeticContent): number {
+	if (remainderOf(c)) return 2;
 	return splitOf(c) ? 3 : 1;
 }
 
 function expectedAt(c: ArithmeticContent, step = 0): number {
+	const rem = remainderOf(c);
+	if (rem) return step >= 1 ? rem.r : rem.q;
 	const split = stepCount(c) === 3 ? splitOf(c) : null;
 	if (!split) return c.answer;
 	return [split[0], split[1], c.answer][Math.min(Math.max(step, 0), 2)];
 }
 
-function tileVisual(a: number, op: Op, b: number): Hint['visual'] {
-	const r = computeResult(a, op, b) ?? 0;
-	const max = Math.max(a, b, r);
-	if (max > 20 || (op !== '+' && op !== '-')) return undefined;
-	return { kind: 'twenty', size: max <= 10 ? 10 : 20, a, b, op };
-}
-
-/** Hint for the first two steps of a decomposed task. */
-function stepHint(c: ArithmeticContent, step: number): Hint {
+/** Hint for the first two steps of a decomposed task: only the picture. */
+function stepHint(c: ArithmeticContent): Hint | null {
 	const { a, op, b } = c.expr!;
-	const [p1, p2] = splitOf(c)!;
-	const visual = tileVisual(a, op, b);
-	const plus = op === '+';
-	if (b >= 10) {
-		return step === 0
-			? {
-					text: `Zerlege die ${b} in Zehner und Einer: ${b} = ${p1} + ${p2}. Rechne erst mit den Zehnern.`,
-					visual
-				}
-			: { text: `Jetzt die Einer: ${plus ? '+' : '−'} ${p2}.`, visual };
-	}
-	return step === 0
-		? {
-				text: plus
-					? `Wie viel fehlt von ${a} bis zur nächsten Zehnerzahl?`
-					: `Wie viel musst du von ${a} abziehen, um auf die Zehnerzahl zu kommen?`,
-				visual
-			}
-		: { text: `Von der ${b} ist schon ${p1} verbraucht. Es bleiben ${p2}.`, visual };
+	if (remainderOf(c)) return { text: `Welche Zahl mal ${b} ist höchstens ${a}?` };
+	const visual = fieldVisual(a, op, b);
+	return visual ? { text: '', visual } : null;
 }
 
 function stepSpeech(c: ArithmeticContent, step: number): string {
 	const { a, op, b } = c.expr!;
 	const w = OP_WORD[op];
+	if (remainderOf(c)) {
+		return step === 0
+			? `${a} geteilt durch ${b}. Wie oft passt die ${b} hinein?`
+			: 'Welcher Rest bleibt?';
+	}
 	if (step >= 2) return `${a} ${w} ${b} ist gleich wie viel?`;
 	if (b >= 10)
 		return step === 0
@@ -315,13 +332,17 @@ function presentArithmetic(c: ArithmeticContent, progress?: StepProgress) {
 		const s = OP_SYMBOL[op];
 		const w = OP_WORD[op];
 		const split = splitOf(c);
-		if (gap === 'result' && steps === 3 && split) {
-			// one slot after the other: the two parts of b, then the result
-			const roles: PartRole[] = ['part', 'part', 'result'];
-			const cell = (i: number): SlotPart => {
-				if (i < step || solved) return num(progress?.filled[i] ?? expectedAt(c, i), roles[i]);
-				return i === step ? { kind: 'gap', role: roles[i] } : { kind: 'blank', role: roles[i] };
-			};
+		const roles: PartRole[] = steps === 2 ? ['result', 'result'] : ['part', 'part', 'result'];
+		// one slot after the other: finished steps as numbers, the current one as a gap
+		const cell = (i: number): SlotPart => {
+			if (i < step || solved) return num(progress?.filled[i] ?? expectedAt(c, i), roles[i]);
+			return i === step ? { kind: 'gap', role: roles[i] } : { kind: 'blank', role: roles[i] };
+		};
+		if (steps === 2 && remainderOf(c)) {
+			// 17 : 5 = □ R □
+			parts.push(num(a, roleA), sym(s), num(b, roleB), sym('='), cell(0), sym('R'), cell(1));
+			speech += solved ? '' : stepSpeech(c, Math.min(step, 1));
+		} else if (gap === 'result' && steps === 3 && split) {
 			if (c.decompose === 'boxes') {
 				// 8 + 7 = □, the parts of the 7 in boxes below it
 				parts.push(
@@ -378,6 +399,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		if (!c.text) delete c.text;
 		if (!c.hint) delete c.hint;
 		if (c.decompose && !splitOf(c)) delete c.decompose;
+		if (!c.withRemainder) delete c.withRemainder;
 		return { ok: true, content: c };
 	},
 
@@ -394,6 +416,8 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 	},
 
 	solved(c) {
+		const rem = remainderOf(c);
+		if (rem && c.expr) return `${c.expr.a} : ${c.expr.b} = ${rem.q} R ${rem.r}`;
 		const split = splitOf(c);
 		if (c.expr && split) {
 			const { a, op, b } = c.expr;
@@ -413,6 +437,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		const r = computeResult(a, op, b) ?? c.answer;
 		const s = OP_SYMBOL[op];
 		const prefix = c.text ? '(Text) ' : '';
+		if (remainderOf(c)) return `${prefix}${a} : ${b} = ? R ?`;
 		if (gap === 'a') return `${prefix}? ${s} ${b} = ${r}`;
 		if (gap === 'b') return `${prefix}${a} ${s} ? = ${r}`;
 		return `${prefix}${a} ${s} ${b} = ?`;
@@ -428,13 +453,20 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 
 	hint(c, step = 0) {
 		const n = stepCount(c);
-		if (n > 1 && step < n - 1) return stepHint(c, step);
 		const custom = c.hint?.trim();
 		let auto: Hint | null = null;
-		if (c.expr) {
+		if (n > 1 && step < n - 1) {
+			auto = stepHint(c);
+			if (custom) return { text: custom, visual: auto?.visual };
+			return auto;
+		}
+		const rem = remainderOf(c);
+		if (rem && c.expr) {
+			auto = { text: `Rechne ${c.expr.a} − ${rem.q} · ${c.expr.b}.` };
+		} else if (c.expr) {
 			const { a, op, b, gap } = c.expr;
 			const r = computeResult(a, op, b);
-			if (r !== null) {
+			if (r !== null && !noAutoHint(a, op, b)) {
 				if (op === '*') {
 					auto =
 						gap === 'result'
@@ -444,7 +476,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 					auto = { text: `Denke an die Malaufgabe: Welche Zahl mal ${b} ergibt ${a}?` };
 					if (gap !== 'result') auto = { text: `Denke an die Malaufgabe: ${r} · ${b} = ${a}.` };
 				} else if (gap === 'result') {
-					auto = additionHint(a, op, b, r);
+					auto = additionHint(a, op as '+' | '-', b);
 				} else {
 					auto = {
 						text:
@@ -456,12 +488,25 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 			}
 		}
 		if (custom) return { text: custom, visual: auto?.visual };
-		return auto;
+		return auto && (auto.text || auto.visual) ? auto : null;
 	},
 
 	distractors(c, count, rng, step = 0) {
 		const n = stepCount(c);
 		const x = expectedAt(c, step);
+		const rem = remainderOf(c);
+		if (rem && step === 1 && c.expr) {
+			// the remainder is always smaller than the divisor
+			const pool = Array.from({ length: c.expr.b }, (_, i) => i)
+				.filter((d) => d !== x)
+				.sort((p, q) => Math.abs(p - x) - Math.abs(q - x))
+				.slice(0, Math.max(count + 2, 4));
+			for (let i = pool.length - 1; i > 0; i--) {
+				const j = Math.floor(rng() * (i + 1));
+				[pool[i], pool[j]] = [pool[j], pool[i]];
+			}
+			return pool.slice(0, count);
+		}
 		if (n > 1 && step < n - 1) {
 			// intermediate step: plausible numbers around the expected one
 			const near = [x + 1, x - 1, x + 2, x - 2, x + 3, x + 10].filter((d) => d >= 0 && d !== x);
@@ -499,6 +544,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 		if (g === null) return 'invalid';
 		const x = expectedAt(c, step);
 		if (g === x) return null;
+		if (remainderOf(c) && step === 1 && c.expr && g >= c.expr.b) return 'remainderTooBig';
 		const n = stepCount(c);
 		if (n > 1 && step < n - 1) {
 			// intermediate step: only the simple patterns
@@ -536,7 +582,7 @@ export const arithmetic: TaskFormat<ArithmeticContent> = {
 			if (a === b) return '1·1 Quadratzahl';
 			return '1·1 abgeleitet';
 		}
-		if (op === ':') return '1:1 Geteiltaufgabe';
+		if (op === ':') return c.withRemainder ? '1:1 mit Rest' : '1:1 Geteiltaufgabe';
 		const r = computeResult(a, op, b) ?? 0;
 		const max = Math.max(a, b, r);
 		const zr = max <= 10 ? 10 : max <= 20 ? 20 : max <= 100 ? 100 : 1000;
@@ -553,5 +599,6 @@ export const ERROR_PATTERN_LABELS: Record<string, string> = {
 	opConfusion: 'Rechenart verwechselt',
 	offByOne: 'um 1 daneben (verzählt?)',
 	offByTen: 'um 10 daneben (Zehner?)',
-	digitSwap: 'Zahlendreher'
+	digitSwap: 'Zahlendreher',
+	remainderTooBig: 'Rest zu groß (nicht kleiner als der Teiler)'
 };

@@ -61,6 +61,8 @@ export const wizardParams = z
 		count: z.coerce.number().int().min(1).max(100).default(10),
 		rounds: z.coerce.number().int().min(1).max(3).default(1),
 		decompose: z.enum(['none', 'boxes', 'equation']).default('none'),
+		/** Divisions: without remainder, only with remainder, or both (all with a remainder box). */
+		remainder: z.enum(['none', 'only', 'mixed']).default('none'),
 		allowZero: bool.default(false),
 		first: operand.default({ kind: 'any', fixed: '' }),
 		second: operand.default({ kind: 'any', fixed: '' }),
@@ -134,6 +136,8 @@ interface Candidate {
 	b: number;
 	/** Position in the natural order (times tables: by row, then factor). */
 	idx?: number;
+	/** Division with remainder box. */
+	rem?: boolean;
 }
 
 function addSubCandidates(p: WizardParams): Candidate[] {
@@ -167,7 +171,7 @@ function addSubCandidates(p: WizardParams): Candidate[] {
 	return out;
 }
 
-function timesCandidates(p: WizardParams): Candidate[] {
+function timesCandidates(p: WizardParams, random: () => number): Candidate[] {
 	const rows = p.rows.length > 0 ? p.rows : Array.from({ length: 10 }, (_, i) => i + 1);
 	const out: Candidate[] = [];
 	const seen = new Set<string>();
@@ -184,7 +188,20 @@ function timesCandidates(p: WizardParams): Candidate[] {
 				if (p.orientation !== 'nxk') push({ a: k, op: '*', b: row });
 				if (p.orientation !== 'kxn') push({ a: row, op: '*', b: k });
 			}
-			if (p.op === ':' || p.op === '*:') push({ a: k * row, op: ':', b: row });
+			if (p.op === ':' || p.op === '*:') {
+				if (p.remainder === 'none') {
+					push({ a: k * row, op: ':', b: row });
+				} else {
+					if (p.remainder === 'mixed') push({ a: k * row, op: ':', b: row, rem: true });
+					if (row >= 2) {
+						if (p.remainder === 'mixed') {
+							const r = 1 + Math.floor(random() * (row - 1));
+							push({ a: k * row + r, op: ':', b: row, rem: true });
+						} else
+							for (let x = 1; x < row; x++) push({ a: k * row + x, op: ':', b: row, rem: true });
+					}
+				}
+			}
 		}
 	}
 	return out;
@@ -204,6 +221,8 @@ function tagsFor(p: WizardParams): string[] {
 	if (p.op === '*' || p.op === ':' || p.op === '*:') {
 		if (p.op !== ':') tags.push('1x1');
 		if (p.op !== '*') tags.push('1:1');
+		if (p.op !== '*' && p.remainder === 'only') tags.push('mit Rest');
+		if (p.op !== '*' && p.remainder === 'mixed') tags.push('mit und ohne Rest');
 		for (const r of p.rows) tags.push(`${r}er-Reihe`);
 		return tags;
 	}
@@ -229,7 +248,10 @@ export function generateFromWizard(input: unknown): WizardResult {
 	if (wantSplit && p.gaps.some((g) => g !== 'result'))
 		warnings.push('Die Zahlzerlegung wirkt nur bei Aufgaben, bei denen das Ergebnis gesucht wird.');
 
-	const pool = shuffle(addSub ? addSubCandidates(p) : timesCandidates(p), r);
+	const pool = shuffle(addSub ? addSubCandidates(p) : timesCandidates(p, makeRng(p.seed + 7)), r);
+	const hasRem = !addSub && p.op !== '*' && p.remainder !== 'none';
+	if (hasRem && p.gaps.some((g) => g !== 'result'))
+		warnings.push('Bei Geteiltaufgaben mit Rest wird immer das Ergebnis gesucht.');
 	const used = new Set<number>();
 	const picked: { c: Candidate; gap: Gap }[] = [];
 	for (let i = 0; i < p.count; i++) {
@@ -259,10 +281,12 @@ export function generateFromWizard(input: unknown): WizardResult {
 			? shuffle(picked, r)
 			: picked
 		: [...picked].sort((x, y) => (x.c.idx ?? 0) - (y.c.idx ?? 0));
-	const drafts: TaskDraft[] = ordered.map(({ c, gap }) => {
+	const drafts: TaskDraft[] = ordered.map(({ c, gap: wanted }) => {
+		const gap: Gap = c.rem ? 'result' : wanted;
 		const expr = { a: c.a, op: c.op, b: c.b, gap };
-		const answer = expectedAnswer(expr) ?? computeResult(c.a, c.op, c.b) ?? 0;
+		const answer = expectedAnswer(expr, c.rem) ?? computeResult(c.a, c.op, c.b) ?? 0;
 		const content: ArithmeticContent = { format: 'arithmetic', expr, answer };
+		if (c.rem) content.withRemainder = true;
 		if (wantSplit && gap === 'result') content.decompose = p.decompose as 'boxes' | 'equation';
 		return { content, tags, origin };
 	});
@@ -292,8 +316,12 @@ export function suggestSetName(input: unknown): string {
 		name = rows.length ? `Einmaleins ${reihen(rows)}` : 'Einmaleins';
 	} else if (p.op === ':') {
 		name = rows.length ? `Geteilt durch ${rowsText(rows)}` : 'Geteilt';
+		if (p.remainder === 'only') name += ' mit Rest';
+		if (p.remainder === 'mixed') name += ' mit und ohne Rest';
 	} else if (p.op === '*:') {
 		name = rows.length ? `Mal und Geteilt, ${reihen(rows)}` : 'Mal und Geteilt';
+		if (p.remainder === 'only') name += ' (Geteilt mit Rest)';
+		if (p.remainder === 'mixed') name += ' (Geteilt mit und ohne Rest)';
 	} else {
 		const fixed = parseFixed(p.second.fixed);
 		const sym = p.op === '-' ? '−' : '+';

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { arithmetic, checkConsistency, computeResult, decomposition } from './arithmetic';
+import {
+	arithmetic,
+	checkConsistency,
+	computeResult,
+	decomposition,
+	expectedAnswer
+} from './arithmetic';
 import type { ArithmeticContent } from './types';
 import { rng } from '../random';
 
@@ -118,7 +124,7 @@ describe('arithmetic format', () => {
 		expect(arithmetic.hint(mul(7, 6))?.text).toContain('5 · 6 + 2 · 6');
 	});
 
-	it('tile hint follows the number range: 10 tiles up to 10, 20 tiles up to 20', () => {
+	it('plus/minus hints are only a picture, up to 100', () => {
 		const add = (a: number, b: number): ArithmeticContent => ({
 			format: 'arithmetic',
 			expr: { a, op: '+', b, gap: 'result' },
@@ -129,11 +135,23 @@ describe('arithmetic format', () => {
 			expr: { a, op: '-', b, gap: 'result' },
 			answer: a - b
 		});
-		expect(arithmetic.hint(add(3, 4))?.visual).toMatchObject({ kind: 'twenty', size: 10 });
-		expect(arithmetic.hint(sub(9, 4))?.visual).toMatchObject({ kind: 'twenty', size: 10 });
-		expect(arithmetic.hint(add(7, 8))?.visual).toMatchObject({ kind: 'twenty', size: 20 });
-		expect(arithmetic.hint(sub(15, 6))?.visual).toMatchObject({ kind: 'twenty', size: 20 });
-		expect(arithmetic.hint(add(30, 8))?.visual).toBeUndefined();
+		expect(arithmetic.hint(add(3, 4))).toEqual({
+			text: '',
+			visual: { kind: 'field', a: 3, b: 4, op: '+' }
+		});
+		expect(arithmetic.hint(sub(15, 6))?.visual).toMatchObject({ kind: 'field', a: 15, b: 6 });
+		expect(arithmetic.hint(add(30, 8))?.visual).toMatchObject({ kind: 'field', a: 30, b: 8 });
+		expect(arithmetic.hint(add(300, 80))).toBeNull();
+		expect(arithmetic.hint({ ...add(300, 80), hint: 'Zähle die Hunderter' })).toEqual({
+			text: 'Zähle die Hunderter',
+			visual: undefined
+		});
+		const gapped: ArithmeticContent = {
+			format: 'arithmetic',
+			expr: { a: 300, op: '+', b: 80, gap: 'b' },
+			answer: 80
+		};
+		expect(arithmetic.hint(gapped)).toBeNull();
 	});
 
 	it('custom hint overrides the text', () => {
@@ -299,10 +317,89 @@ describe('decomposition of the second number', () => {
 
 	it('gives a hint for every step and keeps the old hint for the result', () => {
 		const c = fill();
-		expect(arithmetic.hint(c, 0)?.visual).toMatchObject({ kind: 'twenty', a: 8, b: 7 });
-		expect(arithmetic.hint(c, 1)?.text).toContain('Es bleiben 5');
-		expect(arithmetic.hint(c, 2)?.text).toContain('Rechne erst bis 10');
+		expect(arithmetic.hint(c, 0)).toEqual({
+			text: '',
+			visual: { kind: 'field', a: 8, b: 7, op: '+' }
+		});
+		expect(arithmetic.hint(c, 1)?.visual).toMatchObject({ kind: 'field', a: 8, b: 7 });
+		expect(arithmetic.hint(c, 2)?.visual).toMatchObject({ kind: 'field', a: 8, b: 7 });
+		expect(arithmetic.hint(c, 2)?.text).toBe('');
 		expect(arithmetic.distractors(c, 2, rng(1), 0)).toHaveLength(2);
 		expect(arithmetic.distractors(c, 2, rng(1), 0)).not.toContain(2);
+	});
+});
+
+describe('division with remainder', () => {
+	const div = (a: number, b: number): ArithmeticContent => ({
+		format: 'arithmetic',
+		expr: { a, op: ':', b, gap: 'result' },
+		answer: Math.floor(a / b),
+		withRemainder: true
+	});
+
+	it('has two steps: quotient, then remainder', () => {
+		const c = div(17, 5);
+		expect(arithmetic.steps(c)).toBe(2);
+		expect(arithmetic.expected(c, 0)).toBe(3);
+		expect(arithmetic.expected(c, 1)).toBe(2);
+		expect(arithmetic.check(c, '2', 1)).toBe(true);
+		expect(arithmetic.check(c, '2', 0)).toBe(false);
+		expect(arithmetic.solved(c)).toBe('17 : 5 = 3 R 2');
+		expect(arithmetic.label1(c)).toBe('17 : 5 = ? R ?');
+		expect(arithmetic.family(c)).toBe('1:1 mit Rest');
+	});
+
+	it('shows 17 : 5 = □ R □ one slot after the other', () => {
+		const c = div(17, 5);
+		const first = arithmetic.present(c, { step: 0, filled: [] }).parts;
+		expect(first.map((p) => p.kind)).toEqual(['num', 'op', 'num', 'op', 'gap', 'op', 'blank']);
+		const second = arithmetic.present(c, { step: 1, filled: ['3'] }).parts;
+		expect(second[4]).toMatchObject({ kind: 'num', value: '3' });
+		expect(second[6]).toMatchObject({ kind: 'gap' });
+	});
+
+	it('a division without a remainder still has the remainder box (R 0)', () => {
+		const c = div(15, 5);
+		expect(arithmetic.expected(c, 0)).toBe(3);
+		expect(arithmetic.expected(c, 1)).toBe(0);
+	});
+
+	it('the remainder must be smaller than the divisor', () => {
+		const c = div(17, 5);
+		expect(arithmetic.errorPattern(c, '5', 1)).toBe('remainderTooBig');
+		expect(arithmetic.errorPattern(c, '0', 1)).toBeNull();
+		const d = arithmetic.distractors(c, 3, rng(1), 1);
+		expect(d.every((x) => x < 5 && x !== 2)).toBe(true);
+	});
+
+	it('is only valid for divisions with the result missing', () => {
+		expect(arithmetic.validate(div(17, 5)).ok).toBe(true);
+		expect(
+			arithmetic.validate({ ...div(17, 5), expr: { a: 17, op: '+', b: 5, gap: 'result' } }).ok
+		).toBe(false);
+		expect(
+			arithmetic.validate({ ...div(17, 5), expr: { a: 17, op: ':', b: 5, gap: 'a' } }).ok
+		).toBe(false);
+		expect(
+			arithmetic.validate({
+				format: 'arithmetic',
+				expr: { a: 17, op: ':', b: 5, gap: 'result' },
+				answer: 3
+			}).ok
+		).toBe(false);
+	});
+
+	it('consistency: without the tick 17 : 5 is invalid, with it only the quotient is checked', () => {
+		const base = { a: 17, op: ':' as const, b: 5, gap: 'result' as const };
+		expect(checkConsistency({ ...base, answer: 3 }).status).toBe('invalid');
+		expect(checkConsistency({ ...base, answer: 3, withRemainder: true }).status).toBe('ok');
+		expect(checkConsistency({ ...base, answer: 4, withRemainder: true }).status).toBe('mismatch');
+		expect(expectedAnswer(base, true)).toBe(3);
+	});
+
+	it('hints for both steps', () => {
+		const c = div(17, 5);
+		expect(arithmetic.hint(c, 0)?.text).toContain('höchstens 17');
+		expect(arithmetic.hint(c, 1)?.text).toContain('17 − 3 · 5');
 	});
 });

@@ -88,7 +88,8 @@ Der Container läuft als Nicht-root-Benutzer.
    Zehnerübergang sortiert.
 3. Set **zuweisen** (an ein oder mehrere Kinder, optional mit Zeitraum). Bei jeder Zuweisung
    legt die Lehrkraft fest, welche **Rennarten** das Kind fahren darf (Normal, Fehlerfrei,
-   Gegen die Zeit). „Gegen die Zeit“ erscheint nur mit eingetragener Zielzeit. „Bestzeit
+   Gegen die Zeit, Bestzeit jagen; beim Zuweisen sind alle angehakt, die Zielzeit ist mit einem
+   Vorschlag vorbelegt). „Gegen die Zeit“ erscheint nur mit eingetragener Zielzeit. „Bestzeit
    jagen“ (nur zusammen mit „Fehlerfrei“) ist eine fehlerfreie Fahrt gegen die eigene
    Bestzeit mit Geisterauto; sie ist für das Kind gesperrt, bis es „Fehlerfrei“ einmal
    geschafft hat. Beim Kind sind alle Zuweisungen eines Sets **gebündelt** sichtbar;
@@ -107,8 +108,21 @@ Der Container läuft als Nicht-root-Benutzer.
    Auf dem Startbildschirm tippen sie **Los!** (danach 3-2-1), erst dann läuft die Uhr.
    Ein unterbrochenes Rennen lässt sich 10 Minuten lang fortsetzen. Mit dem Stopp-Knopf
    kann jedes Rennen (auch „Gegen die Zeit“) abgebrochen werden.
-7. **Auswertung**: Übersicht, Lernstand je Kind (Aufgabenarten, Fehlermuster,
-   Verlauf, Rennen), Detail je Rennen, CSV-Export, Druckansicht (als PDF speicherbar).
+7. **Tipps und Lösungen** zeigen bei Plus und Minus bis 100 nur ein Bild, keinen erklärenden
+   Text: das **Punktfeld** (Zehner-, Zwanziger-, Hunderterfeld, mit festen Regeln, was
+   weggestrichen wird) oder **Dienes-Material** (Zehnerstangen mit Einkerbung, Einerwürfel).
+   Im Zahlenraum 1000 gibt es keine automatischen Tipps. Material und **Farben der Zahlen**
+   (1. Zahl blau/2. Zahl rot, schwarz oder nach Stellenwerten mit frei wählbaren Farben) werden
+   beim Set und bei der Zuweisung eingestellt; „Material und Farben auch für neue Sets
+   verwenden“ merkt sie als Standard. Rechnungen aus Zahlen werden nicht vorgelesen.
+8. **Geteilt mit Rest**: Im Assistenten bei „Geteilt“ wählbar (ohne Rest, nur mit Rest, mit und
+   ohne Rest). Das Kind tippt erst das Ergebnis, dann den Rest (`17 : 5 = □ R □`).
+9. **Gruppen**: Unter _Kinder → Gruppen_ lassen sich Klassen und klassenübergreifende
+   Untergruppen anlegen. Beim Zuweisen und für Zugangskarten wählt ein Klick auf die Gruppe alle
+   ihre Kinder aus. Auf der Set-Übersicht lassen sich mit „Reihenfolge und Überschriften
+   bearbeiten“ Sets verschieben und eigenen oder anderen Überschriften zuordnen.
+10. **Auswertung**: Übersicht, Lernstand je Kind (Aufgabenarten, Fehlermuster,
+    Verlauf, Rennen), Detail je Rennen, CSV-Export, Druckansicht (als PDF speicherbar).
 
 ### Rollen
 

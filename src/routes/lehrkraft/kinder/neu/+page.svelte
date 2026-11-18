@@ -37,6 +37,17 @@
 			error={form?.error}
 			field={form?.field}
 		/>
+		{#if data.classes.length > 0}
+			<label class="field">
+				<span>Klasse</span>
+				<select name="classId">
+					<option value="">keine</option>
+					{#each data.classes as c (c.id)}
+						<option value={c.id}>{c.name}</option>
+					{/each}
+				</select>
+			</label>
+		{/if}
 		<label class="field">
 			<span>Passwort *</span>
 			<input

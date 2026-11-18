@@ -13,6 +13,7 @@
  * Run-level settings (target time, …) ignore the task layers.
  */
 import { z } from 'zod';
+import { PLACE_COLORS, PLACE_COLOR_LABEL } from './colors';
 
 export const settingsSchema = z.object({
 	/** How the child answers. */
@@ -46,7 +47,15 @@ export const settingsSchema = z.object({
 	/** Calm mode: no animations, reduced visuals. */
 	calm: z.boolean(),
 	/** Larger text and buttons. */
-	largeText: z.boolean()
+	largeText: z.boolean(),
+	/** Material shown with hints and solutions (up to 100). */
+	visualMaterial: z.enum(['dots', 'dienes']),
+	/** Colours of the numbers and the material. */
+	numberColors: z.enum(['operands', 'black', 'placeValue']),
+	colorOnes: z.enum(PLACE_COLORS),
+	colorTens: z.enum(PLACE_COLORS),
+	colorHundreds: z.enum(PLACE_COLORS),
+	colorThousands: z.enum(PLACE_COLORS)
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -71,8 +80,32 @@ export const DEFAULT_SETTINGS: Settings = {
 	readAloud: 'button',
 	sound: true,
 	calm: false,
-	largeText: false
+	largeText: false,
+	visualMaterial: 'dots',
+	numberColors: 'operands',
+	colorOnes: 'green',
+	colorTens: 'blue',
+	colorHundreds: 'red',
+	colorThousands: 'purple'
 };
+
+export const DISPLAY_KEYS = [
+	'visualMaterial',
+	'numberColors',
+	'colorOnes',
+	'colorTens',
+	'colorHundreds',
+	'colorThousands'
+] as const;
+export type DisplaySettings = Pick<Settings, (typeof DISPLAY_KEYS)[number]>;
+
+/** Display settings from a stored (possibly old or incomplete) settings snapshot. */
+export function displaySettings(raw: unknown): DisplaySettings {
+	const layer = sanitizeLayer(raw) as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	for (const k of DISPLAY_KEYS) out[k] = layer[k] ?? DEFAULT_SETTINGS[k];
+	return out as DisplaySettings;
+}
 
 /** Settings that are resolved separately for each task of a run. */
 export const TASK_LEVEL_KEYS: SettingKey[] = [
@@ -181,9 +214,12 @@ export interface SettingMeta {
 	min?: number;
 	max?: number;
 	unit?: string;
-	group: 'Antworten' | 'Hilfen bei Fehlern' | 'Zeit' | 'Rennen' | 'Darstellung';
+	group:
+		'Antworten' | 'Hilfen bei Fehlern' | 'Zeit' | 'Rennen' | 'Darstellung' | 'Veranschaulichung';
 	/** Where this setting can be edited. Values from other layers are ignored. */
 	levels: Exclude<LayerName, 'default'>[];
+	/** Only shown while another setting of the same editor has this value. */
+	visibleWhen?: { key: SettingKey; value: string };
 	/** Label for stored numbers that are not among the options. */
 	formatNumber?: (n: number) => string;
 }
@@ -337,8 +373,45 @@ export const SETTING_META: Record<SettingKey, SettingMeta> = {
 		type: 'boolean',
 		group: 'Darstellung',
 		levels: ['student']
-	}
+	},
+	visualMaterial: {
+		label: 'Material bei Tipps und Lösungen',
+		help: 'Gilt bis zum Zahlenraum 100.',
+		type: 'enum',
+		group: 'Veranschaulichung',
+		levels: ['set', 'assignment'],
+		options: [
+			{ value: 'dots', label: 'Punktfeld' },
+			{ value: 'dienes', label: 'Dienes-Material (Stangen und Würfel)' }
+		]
+	},
+	numberColors: {
+		label: 'Farben der Zahlen',
+		type: 'enum',
+		group: 'Veranschaulichung',
+		levels: ['set', 'assignment'],
+		options: [
+			{ value: 'operands', label: '1. Zahl blau, 2. Zahl rot' },
+			{ value: 'black', label: 'Schwarz' },
+			{ value: 'placeValue', label: 'Nach Stellenwerten' }
+		]
+	},
+	colorOnes: placeColor('Farbe der Einer'),
+	colorTens: placeColor('Farbe der Zehner'),
+	colorHundreds: placeColor('Farbe der Hunderter'),
+	colorThousands: placeColor('Farbe der Tausender')
 };
+
+function placeColor(label: string): SettingMeta {
+	return {
+		label,
+		type: 'enum',
+		group: 'Veranschaulichung',
+		levels: ['set', 'assignment'],
+		visibleWhen: { key: 'numberColors', value: 'placeValue' },
+		options: PLACE_COLORS.map((c) => ({ value: c, label: PLACE_COLOR_LABEL[c] }))
+	};
+}
 
 export function formatSettingValue(key: SettingKey, value: unknown): string {
 	const meta = SETTING_META[key];

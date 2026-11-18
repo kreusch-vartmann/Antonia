@@ -56,16 +56,20 @@
 						</p>
 						{#if task.hint}
 							<div class="hint">
-								{#if task.hint.visual?.kind !== 'twenty'}
+								{#if task.hint.text}
 									<p><strong>Tipp:</strong> {task.hint.text}</p>
 								{/if}
-								{#if task.hint.visual}<HintVisual visual={task.hint.visual} />{/if}
-								<button
-									class="btn small"
-									disabled={$speechBroken}
-									onclick={() => speak(task.hint?.text ?? '')}
-									><Icon name="speaker" /> Tipp vorlesen</button
-								>
+								{#if task.hint.visual}
+									<HintVisual visual={task.hint.visual} display={data.display} />
+								{/if}
+								{#if task.hint.text}
+									<button
+										class="btn small"
+										disabled={$speechBroken}
+										onclick={() => speak(task.hint?.text ?? '')}
+										><Icon name="speaker" /> Tipp vorlesen</button
+									>
+								{/if}
 							</div>
 						{/if}
 					{/if}

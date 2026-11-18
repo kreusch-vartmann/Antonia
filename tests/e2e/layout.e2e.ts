@@ -82,11 +82,13 @@ test('the race fits the screen and shows tiles and colours', async ({ page }, te
 	// a wrong answer shows the tiles (not only text), second number red
 	await page.getByRole('button', { name: '0', exact: true }).click();
 	await page.getByRole('button', { name: 'Fertig' }).click();
-	const tiles = page.locator('.hint svg.twenty');
+	const tiles = page.locator('.hint svg.field');
 	await expect(tiles).toBeVisible();
 	expect((await tiles.boundingBox())!.width).toBeGreaterThan(150);
-	await expect(page.locator('.hint svg.twenty circle[fill="#c62828"]').first()).toBeVisible();
-	await expect(page.locator('.hint svg.twenty circle[fill="#e9812f"]')).toHaveCount(0);
+	await expect(page.locator('.hint svg.field circle[fill="#c62828"]').first()).toBeVisible();
+	await expect(page.locator('.hint svg.field circle[fill="#e9812f"]')).toHaveCount(0);
+	// a plain equation is not read aloud, so there is no button for it
+	await expect(page.getByRole('button', { name: 'Aufgabe vorlesen' })).toHaveCount(0);
 	await expect(page.locator('.hint').getByText('Tipp:')).toHaveCount(0);
 	if (shots) await page.screenshot({ path: `${shots}/layout-${project}-hint.png` });
 });

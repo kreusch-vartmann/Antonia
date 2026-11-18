@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { HintVisual } from '#lib/domain/formats/types.ts';
+	import { displaySettings, type DisplaySettings } from '#lib/domain/settings.ts';
+	import DotField from '../visual/DotField.svelte';
+	import DienesVisual from '../visual/DienesVisual.svelte';
 
-	let { visual }: { visual: HintVisual } = $props();
+	let { visual, display = displaySettings({}) }: { visual: HintVisual; display?: DisplaySettings } =
+		$props();
 </script>
 
 <div class="visual">
@@ -31,42 +35,10 @@
 				{/each}
 			{/each}
 		</svg>
+	{:else if display.visualMaterial === 'dienes'}
+		<DienesVisual a={visual.a} b={visual.b} op={visual.op} {display} />
 	{:else}
-		<!-- Tile field: 10 or 20 tiles in rows of 10, grouped in fives -->
-		{@const a = visual.a}
-		{@const b = visual.b}
-		{@const rows = visual.size / 10}
-		{@const cells = Array.from({ length: visual.size }, (_, i) => i)}
-		{@const h = rows * 30 + 8}
-		<svg
-			viewBox="0 0 290 {h}"
-			width="290"
-			height={h}
-			class="twenty"
-			role="img"
-			aria-label={visual.size === 10 ? 'Zehnerfeld' : 'Zwanzigerfeld'}
-		>
-			<rect x="1" y="1" width="288" height={h - 2} rx="6" fill="#fff" stroke="#999" />
-			{#each cells as i (i)}
-				{@const row = Math.floor(i / 10)}
-				{@const col = i % 10}
-				{@const x = 18 + col * 26 + (col >= 5 ? 6 : 0)}
-				{@const y = 19 + row * 30}
-				{#if visual.op === '+'}
-					<!-- first number blue, added tiles red -->
-					{@const color = i < a ? '#1f5fbf' : i < a + b ? '#c62828' : '#eee'}
-					<circle cx={x} cy={y} r="10" fill={color} />
-				{:else}
-					<!-- the tiles taken away come first (left), red and crossed out -->
-					{@const crossed = i < Math.min(a, b)}
-					{@const color = i < a ? (crossed ? '#c62828' : '#1f5fbf') : '#eee'}
-					<circle cx={x} cy={y} r="10" fill={color} opacity={crossed ? 0.55 : 1} />
-					{#if crossed}
-						<line x1={x - 8} y1={y - 8} x2={x + 8} y2={y + 8} stroke="#333" stroke-width="2.5" />
-					{/if}
-				{/if}
-			{/each}
-		</svg>
+		<DotField a={visual.a} b={visual.b} op={visual.op} {display} />
 	{/if}
 </div>
 
@@ -81,8 +53,5 @@
 		max-width: 100%;
 		height: auto;
 		flex: none;
-	}
-	.twenty {
-		max-width: min(18rem, 100%);
 	}
 </style>

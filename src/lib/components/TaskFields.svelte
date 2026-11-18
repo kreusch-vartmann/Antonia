@@ -8,6 +8,7 @@
 		OP_SYMBOL
 	} from '#lib/domain/formats/arithmetic.ts';
 	import CalcWarning from './CalcWarning.svelte';
+	import HintVisual from './race/HintVisual.svelte';
 
 	interface Props {
 		content?: ArithmeticContent;
@@ -28,16 +29,22 @@
 	let answer = $state<number | null>(c?.answer ?? null);
 	let answerTouched = $state(!!c);
 	let decompose = $state<'' | 'boxes' | 'equation'>(c?.decompose ?? '');
+	let withRemainder = $state(c?.withRemainder ?? false);
+	const remainderOn = $derived(mode !== 'text' && op === ':' && gap === 'result' && withRemainder);
 	const split = $derived(
 		mode !== 'text' && gap === 'result' && a !== null && b !== null ? decomposition(a, op, b) : null
 	);
 
 	const computed = $derived(
-		mode !== 'text' && a !== null && b !== null ? expectedAnswer({ a, op, b, gap }) : null
+		mode !== 'text' && a !== null && b !== null
+			? expectedAnswer({ a, op, b, gap }, remainderOn)
+			: null
 	);
 
 	const consistency = $derived(
-		mode !== 'text' ? checkConsistency({ a, op, b, gap, answer }) : ({ status: 'ok' } as const)
+		mode !== 'text'
+			? checkConsistency({ a, op, b, gap, answer, withRemainder: remainderOn })
+			: ({ status: 'ok' } as const)
 	);
 
 	$effect(() => {
@@ -50,11 +57,12 @@
 			format: 'arithmetic',
 			answer,
 			text: mode !== 'expr' ? text || undefined : undefined,
-			expr: mode !== 'text' && a !== null && b !== null ? { a, op, b, gap } : undefined
+			expr: mode !== 'text' && a !== null && b !== null ? { a, op, b, gap } : undefined,
+			withRemainder: remainderOn || undefined
 		};
 		const v = arithmetic.validate(draft);
 		return v.ok
-			? { label: arithmetic.label1(v.content), hint: arithmetic.hint(v.content)?.text }
+			? { label: arithmetic.label1(v.content), hint: arithmetic.hint(v.content) }
 			: { error: v.error };
 	});
 </script>
@@ -111,6 +119,12 @@
 				</select>
 			</label>
 		</div>
+		{#if op === ':' && gap === 'result'}
+			<label class="row">
+				<input type="checkbox" name="withRemainder" bind:checked={withRemainder} /> Geteiltaufgabe mit
+				Rest (das Kind gibt erst das Ergebnis, dann den Rest ein)
+			</label>
+		{/if}
 	{/if}
 
 	<div class="grid-2">
@@ -172,7 +186,9 @@
 			{:else}
 				<strong>Vorschau:</strong>
 				{preview.label}
-				{#if preview.hint}<br /><span class="muted small">Hilfe: {preview.hint}</span>{/if}
+				{#if preview.hint?.text}<br /><span class="muted small">Hilfe: {preview.hint.text}</span
+					>{/if}
+				{#if preview.hint?.visual}<HintVisual visual={preview.hint.visual} />{/if}
 			{/if}
 		</div>
 	{/if}

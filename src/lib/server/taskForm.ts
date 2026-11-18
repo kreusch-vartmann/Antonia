@@ -47,12 +47,13 @@ export function arithmeticFromForm(form: FormData, p = ''): ArithmeticContent {
 		if (!OPS.includes(op) || !GAPS.includes(gap)) throw new ValidationError('Ungültige Rechnung.');
 		expr = { a, op, b, gap };
 	}
+	const withRemainder = !!expr && expr.op === ':' && g('withRemainder') === 'on' ? true : undefined;
 	let answer = intOrNull(g('answer'));
-	if (answer === null && expr) answer = expectedAnswer(expr);
+	if (answer === null && expr) answer = expectedAnswer(expr, !!withRemainder);
 	if (answer === null || Number.isNaN(answer)) {
 		throw new ValidationError('Bitte das Ergebnis angeben (ganze Zahl ≥ 0).');
 	}
 	const dec = String(g('decompose') ?? '');
 	const decompose = dec === 'boxes' || dec === 'equation' ? dec : undefined;
-	return { format: 'arithmetic', expr, text, answer, distractors, hint, decompose };
+	return { format: 'arithmetic', expr, text, answer, distractors, hint, decompose, withRemainder };
 }

@@ -52,6 +52,52 @@
 	</p>
 {/if}
 
+{#if data.groups.length > 0}
+	<section class="card stack">
+		<h2>Gruppen</h2>
+		<form
+			method="POST"
+			action="?/groups"
+			use:enhance={() =>
+				async ({ update }) =>
+					update({ reset: false })}
+			class="stack"
+		>
+			{#if data.groups.some((g) => g.kind === 'class')}
+				<label class="field">
+					<span>Klasse</span>
+					<select name="classId">
+						<option value="" selected={!data.myGroups.classId}>keine</option>
+						{#each data.groups.filter((g) => g.kind === 'class') as g (g.id)}
+							<option value={g.id} selected={data.myGroups.classId === g.id}>{g.name}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
+			{#if data.groups.some((g) => g.kind === 'subgroup')}
+				<fieldset>
+					<legend>Untergruppen</legend>
+					<div class="row">
+						{#each data.groups.filter((g) => g.kind === 'subgroup') as g (g.id)}
+							<label class="row">
+								<input
+									type="checkbox"
+									name="subgroupId"
+									value={g.id}
+									checked={data.myGroups.subgroupIds.includes(g.id)}
+								/>
+								{g.name}
+							</label>
+						{/each}
+					</div>
+				</fieldset>
+			{/if}
+			{#if form?.groupsSaved}<p class="success" role="status">Gespeichert.</p>{/if}
+			<div><button class="btn small">Gruppen speichern</button></div>
+		</form>
+	</section>
+{/if}
+
 <section class="card stack">
 	<h2>Rennen</h2>
 	{#if data.races.length === 0}

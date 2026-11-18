@@ -4,11 +4,12 @@ import { schema } from '../db/types';
 import { resolveSettings, sanitizeLayer, type SettingsLayer } from '#lib/domain/settings.ts';
 import { RUN_MODES, cleanModes, type RunMode } from '#lib/domain/modes.ts';
 import { classifySet } from '#lib/domain/numberRange.ts';
+import { isValidHeading } from '#lib/domain/setOrder.ts';
 import type { TaskContent } from '#lib/domain/formats/types.ts';
 import { ValidationError } from './accounts';
 import { canSeeStudent } from './access';
 
-const { taskSet, taskSetItem, task, assignment, student } = schema;
+const { taskSet, taskSetItem, task, assignment, student, setHeading } = schema;
 
 /**
  * Only runs after the last "reset progress" of the assignment count for the child
@@ -46,6 +47,8 @@ export async function listSets(db: Db, teacherId: string) {
 			name: taskSet.name,
 			description: taskSet.description,
 			scenario: taskSet.scenario,
+			heading: taskSet.heading,
+			sortOrder: taskSet.sortOrder,
 			updatedAt: taskSet.updatedAt,
 			items: sql<number>`(select count(*)::int from task_set_item i where i.set_id = "task_set"."id")`,
 			assignments: sql<number>`(select count(*)::int from assignment a where a.set_id = "task_set"."id" and a.archived = false)`
@@ -215,6 +218,44 @@ export async function deleteUnusedTasks(db: Db, teacherId: string, taskIds: stri
 		await db.delete(task).where(and(eq(task.teacherId, teacherId), inArray(task.id, unused)));
 }
 
+/**
+ * Lists the set under another heading (null = automatic). `heading` is "range:<key>" or
+ * "custom:<id>" of an own heading.
+ */
+export async function setSetHeading(
+	db: Db,
+	teacherId: string,
+	setId: string,
+	heading: string | null
+) {
+	const set = await getSet(db, teacherId, setId);
+	if (!set) throw new ValidationError('Set nicht gefunden.');
+	if (heading !== null) {
+		const customs = await db
+			.select({ id: setHeading.id, name: setHeading.name })
+			.from(setHeading)
+			.where(eq(setHeading.teacherId, teacherId));
+		if (!isValidHeading(heading, customs)) throw new ValidationError('Unbekannte Überschrift.');
+	}
+	await db
+		.update(taskSet)
+		.set({ heading, sortOrder: null })
+		.where(and(eq(taskSet.id, setId), eq(taskSet.teacherId, teacherId)));
+}
+
+/** Stores the manual order of sets (the position in the list); only the teacher's own sets. */
+export async function writeSetOrder(db: Db, teacherId: string, setIds: string[]) {
+	const ids = [...new Set(setIds)].slice(0, 500);
+	await db.transaction(async (tx) => {
+		for (const [i, id] of ids.entries()) {
+			await tx
+				.update(taskSet)
+				.set({ sortOrder: i })
+				.where(and(eq(taskSet.id, id), eq(taskSet.teacherId, teacherId)));
+		}
+	});
+}
+
 /** A copy of the set with copies of its tasks, so that changes in one do not affect the other. */
 export async function duplicateSet(db: Db, teacherId: string, id: string) {
 	const set = await getSet(db, teacherId, id);
@@ -225,6 +266,8 @@ export async function duplicateSet(db: Db, teacherId: string, id: string) {
 		description: set.description,
 		settings: set.settings
 	});
+	if (set.heading)
+		await db.update(taskSet).set({ heading: set.heading }).where(eq(taskSet.id, newId));
 	if (items.length) {
 		const copies = await db
 			.insert(task)

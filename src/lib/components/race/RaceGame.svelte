@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
 	import { Tween } from 'svelte/motion';
 	import { cubicOut } from 'svelte/easing';
 	import RaceTrack, { type TrackCar } from './RaceTrack.svelte';
@@ -27,6 +28,7 @@
 	import type { RunPayload } from '#lib/server/services/runs.ts';
 	import type { Feedback } from '#lib/domain/run/engine.ts';
 	import type { PresentationPart } from '#lib/domain/formats/types.ts';
+	import { PLACE_COLOR_HEX, digitPlaces, type Place } from '#lib/domain/colors.ts';
 
 	interface Props {
 		initial: RunPayload;
@@ -61,6 +63,14 @@
 		return out;
 	});
 	const settings = $derived(payload.settings);
+	// reading aloud is only offered where there is text; plain equations and numbers are not read
+	const taskHasText = $derived(!!cur?.presentation.question?.trim());
+	const placeKey = $derived({
+		ones: settings.colorOnes,
+		tens: settings.colorTens,
+		hundreds: settings.colorHundreds,
+		thousands: settings.colorThousands
+	} satisfies Record<Place, keyof typeof PLACE_COLOR_HEX>);
 	const calm = $derived(settings.calm);
 	const mode = $derived(view.mode);
 	const lostToClock = $derived(mode === 'time' && view.status === 'timeUp');
@@ -167,7 +177,7 @@
 				input = '';
 				lastWrong = null;
 				taskStart = performance.now() - (cur?.shownElapsedMs ?? 0);
-				if (settings.readAloud === 'auto' && cur) speak(cur.presentation.speech);
+				if (settings.readAloud === 'auto' && cur && taskHasText) speak(cur.presentation.speech);
 			});
 		}
 	});
@@ -259,18 +269,24 @@
 			lastWrong = given ?? null;
 			let text = 'Noch nicht – probier es nochmal.';
 			const c = payload.view.current;
-			if (c?.solution) text = `Die Lösung ist ${c.solution}. Gib sie ein.`;
-			else if (c?.hint) text = `Boxenstopp! Hier ist ein Tipp.`;
+			let spoken = text;
+			if (c?.solution) {
+				text = `Die Lösung ist ${c.solution}. Gib sie ein.`;
+				spoken = 'Schau dir die Lösung an und gib sie ein.';
+			} else if (c?.hint) {
+				text = `Boxenstopp! Hier ist ein Tipp.`;
+				spoken = c.hint.text ? `${text} ${c.hint.text}` : text;
+			}
 			message = { kind: 'warn', text };
-			if (settings.readAloud === 'auto')
-				speak(c?.hint && !c.solution ? `${text} ${c.hint.text}` : text);
+			if (settings.readAloud === 'auto') speak(spoken);
 		} else if (fb.outcome === 'timeout') {
 			const c = payload.view.current;
 			const text = c?.solution
 				? `Die Zeit ist um. Die Lösung ist ${c.solution}. Gib sie ein.`
 				: 'Die Zeit ist um – diese Aufgabe kommt später nochmal.';
 			message = { kind: 'info', text };
-			if (settings.readAloud === 'auto') speak(text);
+			if (settings.readAloud === 'auto')
+				speak(c?.solution ? 'Die Zeit ist um. Schau dir die Lösung an und gib sie ein.' : text);
 		}
 	}
 
@@ -340,6 +356,14 @@
 	function backspace() {
 		input = input.slice(0, -1);
 	}
+
+	// The browser's back arrow (or back gesture) must not throw the child out of a running race:
+	// it only asks "Möchtest du aufhören?". Reloading or closing the tab is still possible.
+	beforeNavigate((nav) => {
+		if (nav.type === 'leave' || view.status !== 'running') return;
+		nav.cancel();
+		confirmExit = true;
+	});
 
 	function onKey(e: KeyboardEvent) {
 		if (!cur || cur.answerFormat !== 'keypad' || confirmExit) return;
@@ -554,7 +578,7 @@
 						<p class="question">{cur.presentation.question}</p>
 					{/if}
 					<p
-						class="expr"
+						class="expr colors-{settings.numberColors}"
 						class:boxed={cur.steps > 1}
 						class:with-split={hasSplit}
 						class:long={lines.length > 1}
@@ -593,7 +617,7 @@
 							</span>
 						{/each}
 					</p>
-					{#if settings.readAloud !== 'off'}
+					{#if settings.readAloud !== 'off' && taskHasText}
 						<button
 							class="btn small speak"
 							disabled={$speechBroken}
@@ -639,12 +663,12 @@
 
 				{#if cur.hint && !cur.solution}
 					<div class="hint">
-						<!-- tiles speak for themselves; the text is only read aloud -->
-						{#if cur.hint.visual?.kind !== 'twenty'}
+						<!-- the picture speaks for itself; there is only text where there is something to say -->
+						{#if cur.hint.text}
 							<p><strong>Tipp:</strong> {cur.hint.text}</p>
 						{/if}
-						{#if cur.hint.visual}<HintVisual visual={cur.hint.visual} />{/if}
-						{#if settings.readAloud !== 'off'}
+						{#if cur.hint.visual}<HintVisual visual={cur.hint.visual} display={settings} />{/if}
+						{#if settings.readAloud !== 'off' && cur.hint.text}
 							<button
 								class="btn small"
 								disabled={$speechBroken}
@@ -662,7 +686,7 @@
 								? 'Tippe sie ein.'
 								: 'Tippe sie an.'}
 						</p>
-						{#if cur.hint?.visual}<HintVisual visual={cur.hint.visual} />{/if}
+						{#if cur.hint?.visual}<HintVisual visual={cur.hint.visual} display={settings} />{/if}
 					</div>
 				{/if}
 
@@ -712,7 +736,12 @@
 	{:else if part.kind === 'blank'}
 		<span class="blank role-{part.role}" aria-hidden="true"></span>
 	{:else if part.kind === 'num'}
-		<span class="num role-{part.role}">{part.value}</span>
+		<span class="num role-{part.role}"
+			>{#if settings.numberColors === 'placeValue'}{#each digitPlaces(part.value) as d, di (di)}<span
+						style:color={d.place ? PLACE_COLOR_HEX[placeKey[d.place]].text : undefined}
+						>{d.digit}</span
+					>{/each}{:else}{part.value}{/if}</span
+		>
 	{:else if part.kind !== 'break'}
 		<span>{part.value}</span>
 	{/if}
@@ -986,6 +1015,33 @@
 	.split-parts :global(.num) {
 		min-width: 1.5em;
 		text-align: center;
+	}
+	/* black numbers and place-value colours: no blue/red roles */
+	.colors-black .num,
+	.colors-placeValue .num,
+	.colors-black .split,
+	.colors-placeValue .split {
+		color: var(--color-text);
+	}
+	.colors-black .blank.role-b,
+	.colors-black .blank.role-part,
+	.colors-placeValue .blank.role-b,
+	.colors-placeValue .blank.role-part {
+		border-color: #c3c9d0;
+	}
+	.expr.boxed.colors-black .gap.role-b,
+	.expr.boxed.colors-black .gap.role-part,
+	.expr.boxed.colors-placeValue .gap.role-b,
+	.expr.boxed.colors-placeValue .gap.role-part {
+		border-color: var(--color-text);
+	}
+	.colors-black .gap.role-a,
+	.colors-black .gap.role-b,
+	.colors-black .gap.role-part,
+	.colors-placeValue .gap.role-a,
+	.colors-placeValue .gap.role-b,
+	.colors-placeValue .gap.role-part {
+		border-bottom-color: var(--color-primary);
 	}
 	.gap.role-a {
 		border-bottom-color: var(--color-num-a);

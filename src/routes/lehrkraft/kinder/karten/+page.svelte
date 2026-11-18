@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
+	import RaceCar from '#lib/components/race/RaceCar.svelte';
+	import GroupPicker from '#lib/components/GroupPicker.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -8,6 +10,13 @@
 	// svelte-ignore state_referenced_locally
 	let selected = $state<string[]>(
 		data.preselected ? [data.preselected] : data.cards.map((c) => c.id)
+	);
+	// only the children with cards (not the shared ones) can be picked here
+	const cardGroups = $derived(
+		data.groups.map((g) => ({
+			...g,
+			memberIds: g.memberIds.filter((id) => data.cards.some((c) => c.id === id))
+		}))
 	);
 	const shown = $derived(data.cards.filter((c) => selected.includes(c.id)));
 	const unknown = $derived(shown.filter((c) => !c.password).length);
@@ -23,6 +32,7 @@
 		die Anmeldeseite mit eingetragenem Benutzernamen, das Passwort tippt das Kind selbst ein.
 	</p>
 	<form method="POST" use:enhance class="stack card">
+		<GroupPicker groups={cardGroups} bind:selected />
 		<div class="row">
 			{#each data.cards as c (c.id)}
 				<label class="row">
@@ -58,6 +68,9 @@
 <div class="cards">
 	{#each shown as c (c.id)}
 		<div class="kcard">
+			<div class="logo">
+				<RaceCar model="racer" color="blue" size={96} label="Antonia Autorennen" />
+			</div>
 			<div class="text">
 				<div class="kname">{c.displayName}</div>
 				<div><span class="muted">Adresse:</span> {page.url.origin}</div>
@@ -90,8 +103,13 @@
 		padding: var(--space-4);
 		background: #fff;
 		break-inside: avoid;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
 		font-size: 1.1rem;
 		line-height: 1.8;
+	}
+	.logo {
+		line-height: 0;
 	}
 	.kname {
 		font-size: 1.5rem;

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	import type { ArithmeticContent } from '#lib/domain/formats/types.ts';
+	import type { ArithmeticContent, Gap, Op } from '#lib/domain/formats/types.ts';
 
 	/** A task draft; a blank row (manual input) has no numbers yet. */
 	export interface DraftInit {
@@ -7,6 +7,10 @@
 		answer: number | null;
 		hint?: string;
 		decompose?: 'boxes' | 'equation';
+		withRemainder?: boolean;
+		/** Presets from the wizard for blank rows (manual input). */
+		op?: Op;
+		gap?: Gap;
 	}
 </script>
 
@@ -18,7 +22,6 @@
 		expectedAnswer,
 		OP_SYMBOL
 	} from '#lib/domain/formats/arithmetic.ts';
-	import type { Gap, Op } from '#lib/domain/formats/types.ts';
 
 	interface Props {
 		index: number;
@@ -27,29 +30,34 @@
 		onstate?: (index: number, state: { include: boolean; problem: boolean }) => void;
 		/** Shows a button to remove the row (manual input). */
 		onremove?: () => void;
+		/** What the last column offers: decomposition (plus/minus), remainder (division) or both per row. */
+		extraColumn?: 'decompose' | 'remainder' | 'both' | 'none';
 	}
 
-	let { index, draft, onstate, onremove }: Props = $props();
+	let { index, draft, onstate, onremove, extraColumn = 'decompose' }: Props = $props();
 
 	let include = $state(true);
 	// svelte-ignore state_referenced_locally
 	let a = $state<number | null>(draft.expr?.a ?? null);
 	// svelte-ignore state_referenced_locally
-	let op = $state<Op>(draft.expr?.op ?? '+');
+	let op = $state<Op>(draft.expr?.op ?? draft.op ?? '+');
 	// svelte-ignore state_referenced_locally
 	let b = $state<number | null>(draft.expr?.b ?? null);
 	// svelte-ignore state_referenced_locally
-	let gap = $state<Gap>(draft.expr?.gap ?? 'result');
+	let gap = $state<Gap>(draft.expr?.gap ?? draft.gap ?? 'result');
 	// svelte-ignore state_referenced_locally
 	let answer = $state<number | null>(draft.answer);
 	// svelte-ignore state_referenced_locally
 	let decompose = $state<'' | 'boxes' | 'equation'>(draft.decompose ?? '');
+	// svelte-ignore state_referenced_locally
+	let withRemainder = $state(draft.withRemainder ?? false);
+	const remainderOn = $derived(op === ':' && gap === 'result' && withRemainder);
 	/** Once the teacher typed an answer, it is no longer calculated automatically. */
 	let touched = false;
 
 	$effect(() => {
 		if (touched || a === null || b === null) return;
-		const e = expectedAnswer({ a, op, b, gap });
+		const e = expectedAnswer({ a, op, b, gap }, remainderOn);
 		if (e !== null) answer = e;
 	});
 
@@ -58,7 +66,7 @@
 	const split = $derived(
 		gap === 'result' && a !== null && b !== null ? decomposition(a, op, b) : null
 	);
-	const check = $derived(checkConsistency({ a, op, b, gap, answer }));
+	const check = $derived(checkConsistency({ a, op, b, gap, answer, withRemainder: remainderOn }));
 	const problem = $derived(
 		include &&
 			!blank &&
@@ -111,21 +119,36 @@
 			aria-invalid={problem}
 		/>
 	</td>
-	<td>
-		<select
-			name={n('decompose')}
-			bind:value={decompose}
-			disabled={!split}
-			aria-label="Zahlzerlegung"
-			title={split
-				? `${b} = ${split[0]} + ${split[1]}`
-				: 'Nur bei Plus/Minus mit gesuchtem Ergebnis'}
-		>
-			<option value="">keine</option>
-			<option value="boxes">Kästchen</option>
-			<option value="equation">neue Gleichung</option>
-		</select>
-	</td>
+	{#if extraColumn !== 'none'}
+		<td>
+			{#if op === '+' || op === '-'}
+				<select
+					name={n('decompose')}
+					bind:value={decompose}
+					disabled={!split}
+					aria-label="Zahlzerlegung"
+					title={split
+						? `${b} = ${split[0]} + ${split[1]}`
+						: 'Nur bei Plus/Minus mit gesuchtem Ergebnis'}
+				>
+					<option value="">keine</option>
+					<option value="boxes">Kästchen</option>
+					<option value="equation">neue Gleichung</option>
+				</select>
+			{:else if op === ':'}
+				<label class="row">
+					<input
+						type="checkbox"
+						name={n('withRemainder')}
+						bind:checked={withRemainder}
+						disabled={gap !== 'result'}
+					/> mit Rest
+				</label>
+			{:else}
+				<span class="muted" aria-hidden="true">–</span>
+			{/if}
+		</td>
+	{/if}
 	<td
 		><input
 			name={n('hint')}
@@ -148,7 +171,7 @@
 {#if include && !blank && (check.status === 'mismatch' || check.status === 'invalid')}
 	<tr class="warn-row">
 		<td></td>
-		<td colspan="7"><CalcWarning result={check} /></td>
+		<td colspan="8"><CalcWarning result={check} /></td>
 	</tr>
 {/if}
 

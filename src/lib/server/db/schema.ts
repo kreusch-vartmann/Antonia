@@ -22,6 +22,7 @@ import {
 import type { SettingsLayer } from '#lib/domain/settings.ts';
 import type { TaskContent, TaskOrigin } from '#lib/domain/formats/types.ts';
 import type { RunMode, TrophyKind } from '#lib/domain/modes.ts';
+import type { TeacherPreferences } from '#lib/domain/preferences.ts';
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
@@ -48,6 +49,8 @@ export const teacher = pgTable(
 		totpSecretEnc: text('totp_secret_enc'),
 		/** SHA-256 hashes of unused recovery codes. */
 		recoveryCodes: jsonb('recovery_codes').$type<string[]>().notNull().default([]),
+		/** Display defaults for new sets, order of the set headings. */
+		preferences: jsonb('preferences').$type<TeacherPreferences>().notNull().default({}),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -130,12 +133,63 @@ export const taskSet = pgTable(
 		name: text('name').notNull(),
 		description: text('description'),
 		scenario: text('scenario').notNull().default('race'),
+		/** Heading on the overview: null = automatic, else "range:<key>" or "custom:<id>". */
+		heading: text('heading'),
+		/** Manual position within the heading (null = by name). */
+		sortOrder: integer('sort_order'),
 		settings: jsonb('settings').$type<SettingsLayer>().notNull().default({}),
 		archived: boolean('archived').notNull().default(false),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
 	(t) => [index('task_set_teacher_idx').on(t.teacherId)]
+);
+
+/** Own headings of a teacher on the set overview. */
+export const setHeading = pgTable(
+	'set_heading',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		teacherId: uuid('teacher_id')
+			.notNull()
+			.references(() => teacher.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		createdAt: createdAt()
+	},
+	(t) => [index('set_heading_teacher_idx').on(t.teacherId)]
+);
+
+/** Classes and cross-class subgroups of children. Names are no personal data. */
+export const studentGroup = pgTable(
+	'student_group',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		teacherId: uuid('teacher_id')
+			.notNull()
+			.references(() => teacher.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		kind: text('kind').$type<'class' | 'subgroup'>().notNull().default('class'),
+		position: integer('position').notNull().default(0),
+		createdAt: createdAt()
+	},
+	(t) => [index('student_group_teacher_idx').on(t.teacherId)]
+);
+
+export const studentGroupMember = pgTable(
+	'student_group_member',
+	{
+		groupId: uuid('group_id')
+			.notNull()
+			.references(() => studentGroup.id, { onDelete: 'cascade' }),
+		studentId: uuid('student_id')
+			.notNull()
+			.references(() => student.id, { onDelete: 'cascade' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		uniqueIndex('student_group_member_uq').on(t.groupId, t.studentId),
+		index('student_group_member_student_idx').on(t.studentId)
+	]
 );
 
 export const taskSetItem = pgTable(
@@ -231,6 +285,8 @@ export const trophy = pgTable(
 		runId: uuid('run_id').references(() => run.id, { onDelete: 'set null' }),
 		kind: text('kind').$type<TrophyKind>().notNull(),
 		mode: text('mode').$type<RunMode>().notNull(),
+		/** Game scenario of the set (for the display case). */
+		scenario: text('scenario').notNull().default('race'),
 		setName: text('set_name').notNull(),
 		durationMs: integer('duration_ms'),
 		targetMs: integer('target_ms'),

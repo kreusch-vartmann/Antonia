@@ -4,12 +4,14 @@ import { db, requireTeacher } from '#lib/server/auth/guard.ts';
 import { createSet } from '#lib/server/services/sets.ts';
 import { ValidationError } from '#lib/server/services/accounts.ts';
 import { guarded, str } from '#lib/server/forms.ts';
-import { layerFromForm } from '#lib/domain/settings.ts';
+import { DISPLAY_KEYS, layerFromForm } from '#lib/domain/settings.ts';
+import { getPreferences, updatePreferences } from '#lib/server/services/preferences.ts';
 import { previewFromForm, withNewTasks } from '#lib/server/wizardForm.ts';
 
-export const load: PageServerLoad = (event) => {
-	requireTeacher(event);
-	return {};
+export const load: PageServerLoad = async (event) => {
+	const teacherId = requireTeacher(event);
+	const prefs = await getPreferences(db(), teacherId);
+	return { setDefaults: prefs.setDefaults ?? {} };
 };
 
 export const actions: Actions = {
@@ -34,6 +36,12 @@ export const actions: Actions = {
 					taskIds
 				})
 			);
+			if (form.get('rememberDisplay') === 'on') {
+				const display = Object.fromEntries(
+					Object.entries(settings).filter(([k]) => (DISPLAY_KEYS as readonly string[]).includes(k))
+				);
+				await updatePreferences(db(), teacherId, { setDefaults: display });
+			}
 			return { setId };
 		});
 		if (res && 'setId' in res) redirect(303, `/lehrkraft/sets/${res.setId}#zuweisen`);

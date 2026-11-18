@@ -21,12 +21,7 @@
 		rounds?: number;
 	}
 
-	let {
-		selected = ['normal', 'flawless'],
-		targetTime,
-		taskCount = 0,
-		rounds = 1
-	}: Props = $props();
+	let { selected = [...RUN_MODES], targetTime, taskCount = 0, rounds = 1 }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
 	let timeChecked = $state(selected.includes('time'));
@@ -34,18 +29,20 @@
 	let flawlessChecked = $state(selected.includes('flawless'));
 	// svelte-ignore state_referenced_locally
 	let recordChecked = $state(selected.includes('record') && selected.includes('flawless'));
+	// about 12 seconds per task, rounded to 15 seconds
 	// svelte-ignore state_referenced_locally
-	let minutes = $state<number | null>(Math.floor((targetTime ?? 0) / 60));
-	// svelte-ignore state_referenced_locally
-	let seconds = $state<number | null>((targetTime ?? 0) % 60);
+	const startTarget = targetTime || (taskCount > 0 ? suggest(taskCount * rounds) : 0);
+	let minutes = $state<number | null>(Math.floor(startTarget / 60));
+	let seconds = $state<number | null>(startTarget % 60);
 	const total = $derived((minutes ?? 0) * 60 + (seconds ?? 0));
 
 	const QUICK = [60, 90, 120, 180, 300];
-	// about 12 seconds per task, rounded to 15 seconds
 	const runTasks = $derived(taskCount * rounds);
-	const suggestion = $derived(
-		runTasks > 0 ? Math.max(30, Math.round((runTasks * 12) / 15) * 15) : 0
-	);
+	const suggestion = $derived(suggest(runTasks));
+
+	function suggest(tasks: number) {
+		return tasks > 0 ? Math.max(30, Math.round((tasks * 12) / 15) * 15) : 0;
+	}
 
 	function set(totalSeconds: number) {
 		minutes = Math.floor(totalSeconds / 60);
@@ -70,8 +67,10 @@
 				disabled={m === 'record' && !flawlessChecked}
 				onchange={(e) => {
 					const on = e.currentTarget.checked;
-					if (m === 'time') timeChecked = on;
-					else if (m === 'flawless') flawlessChecked = on;
+					if (m === 'time') {
+						timeChecked = on;
+						if (on && total === 0 && suggestion > 0) set(suggestion);
+					} else if (m === 'flawless') flawlessChecked = on;
 					else if (m === 'record') recordChecked = on;
 				}}
 			/>

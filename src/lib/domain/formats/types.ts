@@ -27,6 +27,8 @@ export interface ArithmeticContent {
 	 * number (`boxes`) or in a new equation line (`equation`).
 	 */
 	decompose?: 'boxes' | 'equation';
+	/** Division with remainder: the child enters the quotient, then the remainder (17 : 5 = 3 R 2). */
+	withRemainder?: boolean;
 }
 
 /** Union of all task contents. New formats extend this union. */
@@ -37,10 +39,11 @@ export type TaskOrigin =
 
 export type HintVisual =
 	| { kind: 'dots'; rows: number; cols: number }
-	/** Tile field with 10 or 20 tiles, depending on the number range of the task. */
-	| { kind: 'twenty'; size: 10 | 20; a: number; b: number; op: '+' | '-' };
+	/** Plus/minus up to 100: dot field or base-ten material, chosen by the display settings. */
+	| { kind: 'field'; a: number; b: number; op: '+' | '-' };
 
 export interface Hint {
+	/** An empty text means "no text": the picture speaks for itself. */
 	text: string;
 	visual?: HintVisual;
 }

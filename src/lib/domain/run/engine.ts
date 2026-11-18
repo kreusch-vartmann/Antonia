@@ -323,7 +323,11 @@ function registerWrong(state: RunState, cur: Current) {
 	cur.wrong += 1;
 	cur.stepWrong = stepWrong;
 	if (stepWrong >= def.settings.solutionAfter) cur.solutionShown = true;
-	if (def.settings.hintAfter > 0 && stepWrong >= def.settings.hintAfter) cur.hintShown = true;
+	if (def.settings.hintAfter > 0 && stepWrong >= def.settings.hintAfter) {
+		// no hint without a hint to show (e.g. none over 100)
+		const fmt = formatOf(def.content);
+		if (fmt.hint(def.content, cur.step ?? 0) !== null) cur.hintShown = true;
+	}
 }
 
 export function answer(

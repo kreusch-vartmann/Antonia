@@ -183,3 +183,42 @@ describe('set wizard', () => {
 		);
 	});
 });
+
+describe('wizard: division with remainder', () => {
+	it('"nur mit Rest": every task has the remainder box and a real remainder', () => {
+		const r = generateFromWizard({ op: ':', rows: [5], remainder: 'only', count: 10, seed: 4 });
+		expect(r.drafts.length).toBeGreaterThan(0);
+		for (const d of r.drafts) {
+			const e = d.content.expr!;
+			expect(d.content.withRemainder).toBe(true);
+			expect(e.b).toBe(5);
+			expect(e.a % 5).not.toBe(0);
+			expect(d.content.answer).toBe(Math.floor(e.a / 5));
+		}
+		expect(r.tags).toContain('mit Rest');
+		expect(suggestSetName({ op: ':', rows: [5], remainder: 'only' })).toBe(
+			'Geteilt durch 5 mit Rest'
+		);
+	});
+
+	it('"mit und ohne Rest": both kinds, all with the remainder box', () => {
+		const r = generateFromWizard({ op: ':', rows: [4], remainder: 'mixed', count: 12, seed: 6 });
+		const list = r.drafts.map((d) => d.content);
+		expect(list.every((c) => c.withRemainder)).toBe(true);
+		expect(list.some((c) => c.expr!.a % 4 === 0)).toBe(true);
+		expect(list.some((c) => c.expr!.a % 4 !== 0)).toBe(true);
+	});
+
+	it('without remainder nothing changes', () => {
+		const r = generateFromWizard({ op: ':', rows: [5], count: 5, seed: 1 });
+		expect(r.drafts.every((d) => !d.content.withRemainder && d.content.expr!.a % 5 === 0)).toBe(
+			true
+		);
+	});
+
+	it('warns when a gap other than the result is wanted', () => {
+		const r = generateFromWizard({ op: ':', rows: [5], remainder: 'only', gaps: ['a'], count: 3 });
+		expect(r.warnings.join(' ')).toContain('mit Rest');
+		expect(r.drafts.every((d) => d.content.expr!.gap === 'result')).toBe(true);
+	});
+});

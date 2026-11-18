@@ -164,10 +164,17 @@
 		border-color: #5b8fd9;
 	}
 	.mode.locked {
-		opacity: 0.5;
-		filter: grayscale(1);
+		background: #f1f2f4;
 		cursor: not-allowed;
 		border-style: dashed;
+		border-color: #9aa1a8;
+	}
+	.mode.locked .cup {
+		opacity: 0.5;
+		filter: grayscale(1);
+	}
+	.mode.locked .mode-text small {
+		color: #4b5058;
 	}
 	.best {
 		flex: none;

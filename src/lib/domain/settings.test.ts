@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_SETTINGS,
+	displaySettings,
 	SETTING_META,
 	formatSettingValue,
 	keysForLevel,
@@ -52,7 +53,18 @@ describe('settings inheritance', () => {
 
 	it('lists the settings of a level', () => {
 		expect(keysForLevel('assignment').sort()).toEqual(
-			['order', 'rounds', 'targetTime', 'tasksPerRun'].sort()
+			[
+				'order',
+				'rounds',
+				'targetTime',
+				'tasksPerRun',
+				'visualMaterial',
+				'numberColors',
+				'colorOnes',
+				'colorTens',
+				'colorHundreds',
+				'colorThousands'
+			].sort()
 		);
 		expect(keysForLevel('student')).toContain('readAloud');
 		expect(keysForLevel('set')).not.toContain('readAloud');
@@ -97,5 +109,36 @@ describe('settings inheritance', () => {
 		expect(formatSettingValue('hintAfter', 0)).toBe('Kein Tipp');
 		expect(formatSettingValue('taskTimeLimit', 0)).toBe('Keine Begrenzung');
 		expect(formatSettingValue('taskTimeLimit', 25)).toBe('25 Sekunden');
+	});
+});
+
+describe('display settings', () => {
+	it('start with dots and blue/red numbers', () => {
+		expect(displaySettings({})).toEqual({
+			visualMaterial: 'dots',
+			numberColors: 'operands',
+			colorOnes: 'green',
+			colorTens: 'blue',
+			colorHundreds: 'red',
+			colorThousands: 'purple'
+		});
+	});
+	it('the assignment overrides the set; the child layer is ignored', () => {
+		const r = resolveSettings({
+			set: { numberColors: 'black' },
+			student: { numberColors: 'operands' },
+			assignment: { numberColors: 'placeValue', colorOnes: 'orange' }
+		});
+		expect(r.values.numberColors).toBe('placeValue');
+		expect(r.values.colorOnes).toBe('orange');
+		expect(resolveSettings({ student: { visualMaterial: 'dienes' } }).values.visualMaterial).toBe(
+			'dots'
+		);
+	});
+	it('ignores invalid stored values', () => {
+		expect(displaySettings({ colorOnes: 'pink', visualMaterial: 'dienes' })).toMatchObject({
+			colorOnes: 'green',
+			visualMaterial: 'dienes'
+		});
 	});
 });

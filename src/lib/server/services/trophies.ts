@@ -3,8 +3,9 @@ import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import { formatOf } from '#lib/domain/formats/index.ts';
 import type { Hint } from '#lib/domain/formats/types.ts';
+import { displaySettings } from '#lib/domain/settings.ts';
 
-const { trophy, answerEvent } = schema;
+const { trophy, answerEvent, run } = schema;
 
 /** The child's display case: newest trophy first. */
 export async function listTrophies(db: Db, studentId: string) {
@@ -13,6 +14,7 @@ export async function listTrophies(db: Db, studentId: string) {
 			id: trophy.id,
 			kind: trophy.kind,
 			mode: trophy.mode,
+			scenario: trophy.scenario,
 			setName: trophy.setName,
 			durationMs: trophy.durationMs,
 			targetMs: trophy.targetMs,
@@ -49,6 +51,12 @@ export async function trophyDetail(db: Db, studentId: string, trophyId: string) 
 				.orderBy(asc(answerEvent.seq))
 		: [];
 
+	let runSettings: unknown = {};
+	if (t.runId) {
+		const [r] = await db.select({ settings: run.settings }).from(run).where(eq(run.id, t.runId));
+		runSettings = r?.settings ?? {};
+	}
+
 	const tasks = new Map<string, TrophyTask>();
 	for (const e of events) {
 		const key = `${e.round}|${e.taskId ?? JSON.stringify(e.taskSnapshot)}`;
@@ -80,6 +88,7 @@ export async function trophyDetail(db: Db, studentId: string, trophyId: string) 
 			mistakes: t.mistakes,
 			earnedAt: t.earnedAt
 		},
-		tasks: [...tasks.values()]
+		tasks: [...tasks.values()],
+		display: displaySettings(runSettings)
 	};
 }

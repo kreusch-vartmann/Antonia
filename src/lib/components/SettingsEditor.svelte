@@ -10,6 +10,7 @@
 		type Settings,
 		type SettingsLayer
 	} from '#lib/domain/settings.ts';
+	import { OPERAND_A, OPERAND_B, PLACE_COLOR_HEX, digitPlaces } from '#lib/domain/colors.ts';
 
 	interface Props {
 		/** Where the settings are edited; only settings that belong here are shown. */
@@ -48,6 +49,25 @@
 		return Object.entries(g);
 	});
 
+	// current choices, so that dependent fields can show or hide themselves
+	let values = $state<Record<string, string>>(
+		Object.fromEntries(
+			(Object.keys(SETTING_META) as SettingKey[]).map((k) => [k, String(layer[k] ?? inherited[k])])
+		)
+	);
+	const hidden = (k: SettingKey) => {
+		const w = SETTING_META[k].visibleWhen;
+		return !!w && values[w.key] !== w.value;
+	};
+	const placeColor = (k: string) =>
+		PLACE_COLOR_HEX[values[k] as keyof typeof PLACE_COLOR_HEX]?.text ?? '#222';
+	const placeKeys = {
+		ones: 'colorOnes',
+		tens: 'colorTens',
+		hundreds: 'colorHundreds',
+		thousands: 'colorThousands'
+	};
+
 	const setCount = $derived(keys.filter((k) => layer[k] !== undefined).length);
 
 	/** Where an inherited value comes from, if not from the standard values. */
@@ -71,10 +91,24 @@
 		{#each groups as [group, ks] (group)}
 			<fieldset>
 				<legend>{group}</legend>
+				{#if group === 'Veranschaulichung'}
+					<p class="sample" aria-label="Vorschau der Farben">
+						{#if values.numberColors === 'placeValue'}
+							{#each [34, 22] as n, ni (ni)}{#each digitPlaces(String(n)) as d, di (di)}<span
+										style:color={d.place ? placeColor(placeKeys[d.place]) : undefined}
+										>{d.digit}</span
+									>{/each}{ni === 0 ? ' − ' : ''}{/each}
+						{:else if values.numberColors === 'black'}
+							34 − 22
+						{:else}
+							<span style:color={OPERAND_A}>34</span> − <span style:color={OPERAND_B}>22</span>
+						{/if}
+					</p>
+				{/if}
 				{#each ks as k (k)}
 					{@const meta = SETTING_META[k]}
 					{@const current = layer[k] ?? inherited[k]}
-					<label class="field">
+					<label class="field" hidden={hidden(k)}>
 						<span>{meta.label}</span>
 						{#if meta.type === 'number'}
 							<input
@@ -85,7 +119,7 @@
 								value={current}
 							/>
 						{:else}
-							<select name={prefix + k}>
+							<select name={prefix + k} onchange={(e) => (values[k] = e.currentTarget.value)}>
 								{#if meta.type === 'boolean'}
 									<option value="true" selected={current === true}>Ja</option>
 									<option value="false" selected={current === false}>Nein</option>
@@ -127,6 +161,11 @@
 		align-items: baseline;
 		min-height: 2.5rem;
 		align-items: center;
+	}
+	.sample {
+		margin: 0;
+		font-size: 1.6rem;
+		font-weight: 700;
 	}
 	.source {
 		color: var(--color-muted);

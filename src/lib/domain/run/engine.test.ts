@@ -334,3 +334,41 @@ describe('run engine', () => {
 		});
 	});
 });
+
+describe('no hint over 100', () => {
+	it('a wrong answer shows no hint and counts none', () => {
+		const settings = { ...DEFAULT_SETTINGS, hintAfter: 1, solutionAfter: 3 };
+		const content: ArithmeticContent = {
+			format: 'arithmetic',
+			expr: { a: 300, op: '+', b: 80, gap: 'result' },
+			answer: 380
+		};
+		const tasks: RunTaskDef[] = [{ id: 't1', content, settings: pickTaskSettings(settings) }];
+		const s = createRun({ tasks, settings, seed: 7, now: 0 });
+		const r = answer(s, { key: view(s, 0).current!.key, value: '1', ms: 100 }, 100);
+		expect(r.events[0]).toMatchObject({ hintShown: false });
+		expect(view(s, 100).current!.hint).toBeNull();
+	});
+});
+
+describe('division with remainder in a race', () => {
+	it('quotient first, then the remainder; a wrong remainder is a mistake', () => {
+		const settings = { ...DEFAULT_SETTINGS, repeatWrong: false };
+		const content: ArithmeticContent = {
+			format: 'arithmetic',
+			expr: { a: 17, op: ':', b: 5, gap: 'result' },
+			answer: 3,
+			withRemainder: true
+		};
+		const tasks: RunTaskDef[] = [{ id: 't1', content, settings: pickTaskSettings(settings) }];
+		const s = createRun({ tasks, settings, seed: 7, now: 0 });
+		expect(view(s, 0).current).toMatchObject({ step: 0, steps: 2 });
+		const r1 = answer(s, { key: view(s, 0).current!.key, value: '3', ms: 100 }, 100);
+		expect(r1.feedback).toMatchObject({ outcome: 'correct', step: true });
+		const bad = answer(s, { key: view(s, 100).current!.key, value: '1', ms: 100 }, 200);
+		expect(bad.feedback).toMatchObject({ outcome: 'wrong' });
+		const ok = answer(s, { key: view(s, 200).current!.key, value: '2', ms: 100 }, 300);
+		expect(ok.feedback).toMatchObject({ outcome: 'correct' });
+		expect(s.status).toBe('finished');
+	});
+});

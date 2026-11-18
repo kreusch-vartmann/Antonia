@@ -18,9 +18,10 @@ import {
 	unshareStudent
 } from '#lib/server/services/access.ts';
 import { racesForStudent } from '#lib/server/services/sets.ts';
+import { listGroups, setStudentGroups } from '#lib/server/services/groups.ts';
 import { resetProgress } from '#lib/server/services/progress.ts';
 import { audit } from '#lib/server/services/audit.ts';
-import { guarded, isUuid, str } from '#lib/server/forms.ts';
+import { guarded, isUuid, str, strs } from '#lib/server/forms.ts';
 import { layerFromForm } from '#lib/domain/settings.ts';
 import { kidPassword } from '#lib/server/auth/password.ts';
 import { destroyAllSessions } from '#lib/server/auth/session.ts';
@@ -31,6 +32,13 @@ export const load: PageServerLoad = async (event) => {
 	const student = await getStudent(db(), teacherId, event.params.id);
 	if (!student) error(404, 'Nicht gefunden');
 	const races = await racesForStudent(db(), teacherId, student.id);
+	const groups = await listGroups(db(), teacherId);
+	const myGroups = {
+		classId: groups.find((g) => g.kind === 'class' && g.memberIds.includes(student.id))?.id ?? '',
+		subgroupIds: groups
+			.filter((g) => g.kind === 'subgroup' && g.memberIds.includes(student.id))
+			.map((g) => g.id)
+	};
 	if (student.access === 'shared') {
 		// a guest only sees what is needed to assign sets and evaluate
 		return {
@@ -42,7 +50,9 @@ export const load: PageServerLoad = async (event) => {
 				lastName: student.lastName,
 				displayName: student.displayName
 			},
-			races
+			races,
+			groups,
+			myGroups
 		};
 	}
 	const { passwordHash: _hash, passwordEnc, ...safe } = student;
@@ -52,6 +62,8 @@ export const load: PageServerLoad = async (event) => {
 		student: safe,
 		hasStoredPassword: passwordEnc !== null,
 		races,
+		groups,
+		myGroups,
 		shares: await listShares(db(), student.id),
 		teachers: await otherTeachers(db(), teacherId),
 		suggestedPassword: kidPassword()
@@ -72,6 +84,18 @@ export const actions: Actions = {
 				settings: layerFromForm(form)
 			});
 			return { saved: true };
+		});
+	},
+	groups: async (event) => {
+		const teacherId = requireTeacher(event);
+		const form = await event.request.formData();
+		const classId = str(form, 'classId');
+		return guarded(async () => {
+			await setStudentGroups(db(), teacherId, event.params.id, {
+				classId: isUuid(classId) ? classId : null,
+				subgroupIds: strs(form, 'subgroupId').filter(isUuid)
+			});
+			return { groupsSaved: true };
 		});
 	},
 	password: async (event) => {

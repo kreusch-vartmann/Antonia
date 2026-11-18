@@ -104,6 +104,13 @@ test('child races and finishes', async ({ page }) => {
 	// "Nochmal fahren" counts down and starts a new run; stopping it leads back to the overview
 	await page.getByRole('button', { name: 'Nochmal fahren' }).click();
 	await expect(page.getByText('1 · 5 =')).toBeVisible({ timeout: 15_000 });
+	// the browser's back arrow does not throw the child out; it asks, and the typed digit is kept
+	await page.getByRole('button', { name: '7', exact: true }).click();
+	await page.goBack();
+	await expect(page.getByText('Möchtest du aufhören?')).toBeVisible();
+	await expect(page).toHaveURL(/\/ueben\/rennen\//);
+	await page.getByRole('button', { name: 'Weiterfahren' }).click();
+	await expect(page.getByLabel('Antwort')).toHaveText('7');
 	await page.getByRole('button', { name: 'Aufhören' }).click();
 	await expect(page.getByText('Möchtest du aufhören?')).toBeVisible();
 	await page.getByRole('button', { name: 'Weiterfahren' }).click();
@@ -118,10 +125,11 @@ test('child races and finishes', async ({ page }) => {
 	await expect(page.getByText('Einmaleins 5er-Reihe')).toBeVisible();
 	await a11y(page);
 
-	// hovering shows when the trophy was earned and the number of mistakes
-	await page.getByRole('img', { name: 'Bronzener Pokal' }).hover();
-	await expect(page.getByRole('tooltip')).toContainText('Erworben am');
-	await expect(page.getByRole('tooltip')).toContainText('1 Fehler');
+	// the board counts the trophies of the scenario; date and mistakes stand under the trophy
+	await expect(page.getByRole('heading', { name: 'Autorennen' })).toBeVisible();
+	await expect(page.getByLabel('1 bronzener Pokal')).toBeVisible();
+	await expect(page.getByLabel('0 silberne Pokale')).toBeVisible();
+	await expect(page.locator('.band').getByText('1 Fehler')).toBeVisible();
 
 	// clicking shows the whole race with a tip for the task that went wrong
 	await page.getByRole('img', { name: 'Bronzener Pokal' }).click();

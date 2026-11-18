@@ -84,3 +84,13 @@ export function clockPrecise(ms: number): string {
 	const s = Math.floor(tenths / 10);
 	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')},${tenths % 10}`;
 }
+
+/** "1 bronzener Pokal", "3 bronzene Pokale", "0 goldene Pokale". */
+export function trophyCount(kind: TrophyKind, n: number): string {
+	const adj: Record<TrophyKind, [string, string]> = {
+		bronze: ['bronzener', 'bronzene'],
+		silver: ['silberner', 'silberne'],
+		gold: ['goldener', 'goldene']
+	};
+	return n === 1 ? `1 ${adj[kind][0]} Pokal` : `${n} ${adj[kind][1]} Pokale`;
+}

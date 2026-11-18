@@ -2,7 +2,13 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { schema } from '../db/types';
 import type { Kv } from '../kv/types';
-import { resolveSettings, type Settings } from '#lib/domain/settings.ts';
+import {
+	DISPLAY_KEYS,
+	displaySettings,
+	resolveSettings,
+	type DisplaySettings,
+	type Settings
+} from '#lib/domain/settings.ts';
 import { RUN_MODES, isFlawlessMode, trophyFor, type RunMode } from '#lib/domain/modes.ts';
 import {
 	abort,
@@ -64,7 +70,8 @@ function lastActive(s: StoredRun): number {
 export type ClientSettings = Pick<
 	Settings,
 	'readAloud' | 'sound' | 'calm' | 'largeText' | 'targetTime' | 'showTimer'
->;
+> &
+	DisplaySettings;
 
 export interface RunPayload {
 	runId: string;
@@ -102,7 +109,9 @@ function clientSettings(s: Settings): ClientSettings {
 		calm: s.calm,
 		largeText: s.largeText,
 		targetTime: s.targetTime,
-		showTimer: s.showTimer
+		showTimer: s.showTimer,
+		// runs stored before these settings existed fall back to the defaults
+		...displaySettings(Object.fromEntries(DISPLAY_KEYS.map((k) => [k, s[k]])))
 	};
 }
 
@@ -305,7 +314,7 @@ async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 			)
 		);
 	const [set] = await db
-		.select({ name: taskSet.name })
+		.select({ name: taskSet.name, scenario: taskSet.scenario })
 		.from(taskSet)
 		.where(eq(taskSet.id, s.setId));
 	await db
@@ -315,6 +324,7 @@ async function awardTrophy(db: Db, s: StoredRun, durationMs: number | null) {
 			runId: s.runId,
 			kind,
 			mode,
+			scenario: set?.scenario ?? 'race',
 			setName: set?.name ?? '',
 			durationMs,
 			mistakes: wrong?.n ?? 0,

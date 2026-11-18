@@ -2,7 +2,7 @@
 	import SetWizard from '#lib/components/SetWizard.svelte';
 	import type { PageProps } from './$types';
 
-	let { form }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 </script>
 
 <svelte:head><title>Set anlegen – Antonia</title></svelte:head>
@@ -14,4 +14,4 @@
 	Speichern ändern oder abwählen.
 </p>
 
-<SetWizard target={{ kind: 'new' }} {form} />
+<SetWizard target={{ kind: 'new' }} {form} setDefaults={data.setDefaults} />

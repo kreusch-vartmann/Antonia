@@ -3,15 +3,18 @@
 	import DraftRow, { type DraftInit } from './DraftRow.svelte';
 	import SettingsEditor from './SettingsEditor.svelte';
 	import { OPERAND_LABEL, type OperandKind, type WizardPreview } from '#lib/domain/wizard.ts';
+	import type { SettingsLayer } from '#lib/domain/settings.ts';
 
 	interface Props {
 		/** A new set, or more tasks for an existing set. */
 		target: { kind: 'new' } | { kind: 'add'; setId: string; setName: string };
 		/** Result of the last form action of the page. */
 		form: { preview?: WizardPreview; error?: string; where?: string } | null | undefined;
+		/** Display settings the teacher chose as the standard for new sets. */
+		setDefaults?: SettingsLayer;
 	}
 
-	let { target, form }: Props = $props();
+	let { target, form, setDefaults = {} }: Props = $props();
 
 	const OPS = [
 		{ value: '+', symbol: '+', label: 'Plus' },
@@ -30,6 +33,7 @@
 	let tenTransition = $state('any');
 	let hundredTransition = $state('any');
 	let decompose = $state('none');
+	let remainder = $state('none');
 	let count = $state(10);
 	let rounds = $state(1);
 	let rows = $state<string[]>([]);
@@ -40,6 +44,16 @@
 	let factorTo = $state(10);
 
 	const addSub = $derived(op === '+' || op === '-' || op === '+-');
+	const hasDivision = $derived(op === ':' || op === '*:');
+	const OP_WORD: Record<string, string> = {
+		'+': 'Plus',
+		'-': 'Minus',
+		'+-': 'Plus und Minus',
+		'*': 'Mal',
+		':': 'Geteilt',
+		'*:': 'Mal und Geteilt'
+	};
+	const GAP_WORD: Record<string, string> = { result: 'Ergebnis', a: '1. Zahl', b: '2. Zahl' };
 	const operandKinds = $derived(
 		(Object.keys(OPERAND_LABEL) as OperandKind[]).filter((k) => {
 			if (k === 'any' || k === 'ones' || k === 'fixed') return true;
@@ -64,6 +78,18 @@
 	let nameTouched = false;
 	let lastForm: unknown = null;
 
+	/** The last column of the task table: only what makes sense for the chosen calculation. */
+	const extraColumn = $derived<'decompose' | 'remainder' | 'both' | 'none'>(
+		mode === 'manual' ? 'both' : addSub ? 'decompose' : hasDivision ? 'remainder' : 'none'
+	);
+	const extraHeader = $derived(
+		extraColumn === 'decompose'
+			? 'Zerlegung'
+			: extraColumn === 'remainder'
+				? 'Rest'
+				: 'Zerlegung / Rest'
+	);
+
 	$effect(() => {
 		const f = form;
 		if (f && f !== lastForm && f.preview) {
@@ -74,7 +100,13 @@
 			mode = 'generate';
 			items = p.drafts.map((d, i) => ({
 				id: i,
-				draft: { expr: d.expr, answer: d.answer, hint: d.hint, decompose: d.decompose }
+				draft: {
+					expr: d.expr,
+					answer: d.answer,
+					hint: d.hint,
+					decompose: d.decompose,
+					withRemainder: d.withRemainder
+				}
 			}));
 			nextId = items.length;
 			rowStates = {};
@@ -100,10 +132,22 @@
 		nextId = 0;
 	}
 
+	/** Blank rows start with what was chosen in the wizard (calculation, gap, decomposition, remainder). */
+	function presetRow(i: number): DraftInit {
+		const rowOp =
+			op === '+-' ? (i % 2 === 0 ? '+' : '-') : op === '*:' ? (i % 2 === 0 ? '*' : ':') : op;
+		const gap = (gaps.length > 0 ? gaps[i % gaps.length] : 'result') as 'result' | 'a' | 'b';
+		const draft: DraftInit = { answer: null, op: rowOp as '+' | '-' | '*' | ':', gap };
+		if ((rowOp === '+' || rowOp === '-') && decompose !== 'none')
+			draft.decompose = decompose as 'boxes' | 'equation';
+		if (rowOp === ':' && remainder !== 'none') draft.withRemainder = true;
+		return draft;
+	}
+
 	function addRows(n: number) {
 		const more = Array.from({ length: n }, (_, i) => ({
 			id: nextId + i,
-			draft: { answer: null } as DraftInit
+			draft: presetRow(nextId + i)
 		}));
 		nextId += n;
 		items = [...items, ...more];
@@ -182,6 +226,30 @@
 						{/each}
 					</div>
 					<p class="muted small">Nichts angehakt: alle Reihen von 1 bis 10.</p>
+				</fieldset>
+			{/if}
+
+			{#if hasDivision}
+				<fieldset>
+					<legend>Rest bei Geteiltaufgaben</legend>
+					<div class="row">
+						<label class="row check"
+							><input type="radio" name="p.remainder" value="none" bind:group={remainder} /> ohne Rest</label
+						>
+						<label class="row check"
+							><input type="radio" name="p.remainder" value="only" bind:group={remainder} /> nur mit Rest</label
+						>
+						<label class="row check"
+							><input type="radio" name="p.remainder" value="mixed" bind:group={remainder} /> mit und
+							ohne Rest</label
+						>
+					</div>
+					{#if remainder !== 'none'}
+						<p class="muted small">
+							Das Kind gibt erst das Ergebnis ein, dann den Rest: 17 : 5 = □ R □. Bei „mit und ohne
+							Rest“ haben alle Aufgaben das Kästchen für den Rest (ohne Rest ist es 0).
+						</p>
+					{/if}
 				</fieldset>
 			{/if}
 
@@ -401,6 +469,14 @@
 				Trage die Aufgaben ein. Wenn du mehr brauchst, füge mit „+ Aufgabe“ weitere Zeilen hinzu.
 				Leere Zeilen werden ignoriert. Das Ergebnis wird automatisch ausgerechnet.
 			</p>
+			<p class="muted small">
+				Vorgaben aus dem Assistenten: {OP_WORD[op]}, gesucht: {gaps.length
+					? gaps.map((g) => GAP_WORD[g]).join(' / ')
+					: 'Ergebnis'}{addSub && decompose !== 'none'
+					? `, Zerlegung: ${decompose === 'boxes' ? 'Kästchen' : 'neue Gleichung'}`
+					: ''}{hasDivision && remainder !== 'none' ? ', mit Rest' : ''}. Du kannst sie in jeder
+				Zeile ändern.
+			</p>
 			<p>
 				<button type="button" class="linklike" onclick={backToWizard}
 					>← Zurück zum Assistenten</button
@@ -432,7 +508,8 @@
 					<thead>
 						<tr>
 							<th>Nehmen</th><th>Zahl 1</th><th></th><th>Zahl 2</th><th>Gesucht</th><th>Antwort</th
-							><th>Zerlegung</th><th>Eigene Hilfe</th>{#if mode === 'manual'}<th></th>{/if}
+							>{#if extraColumn !== 'none'}<th>{extraHeader}</th>{/if}<th>Eigene Hilfe</th
+							>{#if mode === 'manual'}<th></th>{/if}
 						</tr>
 					</thead>
 					<tbody>
@@ -440,6 +517,7 @@
 							<DraftRow
 								index={it.id}
 								draft={it.draft}
+								{extraColumn}
 								onstate={setState}
 								onremove={mode === 'manual' ? () => remove(it.id) : undefined}
 							/>
@@ -488,10 +566,13 @@
 				{/if}
 				<SettingsEditor
 					level="set"
-					layer={{}}
+					layer={setDefaults}
 					exclude={['rounds']}
 					title="Einstellungen für dieses Set"
 				/>
+				<label class="row check">
+					<input type="checkbox" name="rememberDisplay" /> Material und Farben auch für neue Sets verwenden
+				</label>
 			{/if}
 
 			{#if problemCount > 0}
