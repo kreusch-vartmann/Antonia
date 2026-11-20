@@ -20,6 +20,15 @@
 	);
 	const shown = $derived(data.cards.filter((c) => selected.includes(c.id)));
 	const unknown = $derived(shown.filter((c) => !c.password).length);
+
+	// length of the longest line, so the text can be scaled to fit without wrapping
+	function longestLine(c: { username: string; password?: string | null }) {
+		return Math.max(
+			'Adresse: '.length + page.url.host.length,
+			'Benutzername: '.length + c.username.length,
+			'Passwort: '.length + Math.max(c.password?.length ?? 0, 9)
+		);
+	}
 </script>
 
 <svelte:head><title>Zugangskarten – Antonia</title></svelte:head>
@@ -67,21 +76,21 @@
 
 <div class="cards">
 	{#each shown as c (c.id)}
-		<div class="kcard">
+		<div class="kcard" style="--chars: {longestLine(c)}">
 			<div class="logo">
-				<RaceCar model="racer" color="blue" size={96} label="Antonia Autorennen" />
+				<RaceCar model="racer" color="blue" size={72} label="Antonia Autorennen" />
 			</div>
+			<div class="kname">{c.displayName}</div>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			<div class="qr" role="img" aria-label="QR-Code zur Anmeldeseite">{@html c.qr}</div>
 			<div class="text">
-				<div class="kname">{c.displayName}</div>
-				<div><span class="muted">Adresse:</span> {page.url.origin}</div>
+				<div><span class="muted">Adresse:</span> {page.url.host}</div>
 				<div><span class="muted">Benutzername:</span> <strong>{c.username}</strong></div>
 				<div>
 					<span class="muted">Passwort:</span>
 					{#if c.password}<strong>{c.password}</strong>{:else}<span class="blank"></span>{/if}
 				</div>
 			</div>
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			<div class="qr" role="img" aria-label="QR-Code zur Anmeldeseite">{@html c.qr}</div>
 		</div>
 	{/each}
 </div>
@@ -89,15 +98,18 @@
 <style>
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
 		gap: var(--space-4);
 		margin-top: var(--space-6);
 	}
 	.kcard {
-		display: flex;
-		gap: var(--space-3);
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-areas:
+			'logo name qr'
+			'text text text';
+		gap: var(--space-2) var(--space-3);
 		align-items: center;
-		justify-content: space-between;
 		border: 2px dashed var(--color-border);
 		border-radius: var(--radius);
 		padding: var(--space-4);
@@ -105,24 +117,35 @@
 		break-inside: avoid;
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
-		font-size: 1.1rem;
+		container-type: inline-size;
 		line-height: 1.8;
 	}
 	.logo {
+		grid-area: logo;
 		line-height: 0;
 	}
 	.kname {
+		grid-area: name;
+		min-width: 0;
+		overflow-wrap: anywhere;
 		font-size: 1.5rem;
 		font-weight: 800;
+		line-height: 1.2;
 		color: var(--color-primary);
 	}
 	.text {
+		grid-area: text;
 		min-width: 0;
-		word-break: break-word;
+	}
+	.text {
+		font-size: min(1rem, calc(100cqw / (var(--chars) * 0.6)));
+	}
+	.text > div {
+		white-space: nowrap;
 	}
 	.qr {
-		flex: none;
-		width: 7.5rem;
+		grid-area: qr;
+		width: 6.5rem;
 	}
 	.qr :global(svg) {
 		width: 100%;
@@ -138,6 +161,9 @@
 		.cards {
 			grid-template-columns: 1fr 1fr;
 			margin: 0;
+		}
+		.text {
+			font-size: min(0.95rem, calc(100cqw / (var(--chars) * 0.6)));
 		}
 	}
 </style>
